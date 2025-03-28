@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}Журнал действий - S3 Менеджер{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h1 class="mb-4">Журнал действий</h1>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Время</th>
+                            <th>Пользователь</th>
+                            <th>Действие</th>
+                            <th>Объект</th>
+                            <th>Статус</th>
+                            <th>IP адрес</th>
+                            <th>Детали</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td>{{ log.timestamp|date:"d.m.Y H:i:s" }}</td>
+                            <td>{{ log.user.username|default:"Аноним" }}</td>
+                            <td>
+                                {% if log.action_type == 'read' %}
+                                <span class="badge bg-info">Чтение</span>
+                                {% elif log.action_type == 'upload' %}
+                                <span class="badge bg-primary">Загрузка</span>
+                                {% elif log.action_type == 'download' %}
+                                <span class="badge bg-success">Скачивание</span>
+                                {% elif log.action_type == 'delete' %}
+                                <span class="badge bg-danger">Удаление</span>
+                                {% elif log.action_type == 'create_folder' %}
+                                <span class="badge bg-warning">Создание папки</span>
+                                {% elif log.action_type == 'delete_folder' %}
+                                <span class="badge bg-danger">Удаление папки</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ log.action_type }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ log.object_path }}</td>
+                            <td>
+                                {% if log.success %}
+                                <span class="badge bg-success">Успешно</span>
+                                {% else %}
+                                <span class="badge bg-danger">Ошибка</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ log.ip_address|default:"-" }}</td>
+                            <td>
+                                {% if log.details %}
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        data-bs-toggle="modal" data-bs-target="#detailsModal{{ log.id }}">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+
+                                <!-- Modal с деталями -->
+                                <div class="modal fade" id="detailsModal{{ log.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Детали действия</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <pre>{{ log.details }}</pre>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-3">
+                                <i class="fas fa-info-circle me-2"></i> Журнал действий пуст
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
