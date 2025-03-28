@@ -1,0 +1,86 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проверка браузера</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 600px;
+            padding: 2rem;
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .loader {
+            border: 4px solid #333;
+            border-top: 4px solid #00a67e;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        #error-message {
+            color: #ff4d4d;
+            font-weight: bold;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .retry-btn {
+            background-color: #00a67e;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .retry-btn:hover {
+            background-color: #008c6a;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Проверка браузера</h1>
+    <p>Пожалуйста, подождите, выполняется проверка браузера...</p>
+    <div class="loader" id="loader"></div>
+    <div id="error-message"></div>
+    <button id="retry-btn" class="retry-btn" onclick="window.location.reload()">Повторить попытку</button>
+</div>
+
+<script type="text/javascript" src="{% static 'js/browser_verify.js' %}"></script>
+</body>
+</html>

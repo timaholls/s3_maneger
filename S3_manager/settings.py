@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',  # <-- ADD THIS LINE
 
     # Third party apps
     'storages',
@@ -40,7 +41,25 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    # Лимит по запросам в минуту
+    's3app.rate_limit.RateLimitMiddleware',  # ИЛИ 'your_project_name.middleware.RateLimitMiddleware'
+
+    # Проверка JS при входе
+    's3app.middleware.BrowserChallengeMiddleware',
+
 ]
+
+# (Опционально) Настройки для  RateLimitMiddleware
+RATE_LIMIT_REQUESTS = 60  # Максимум 60 запросов
+RATE_LIMIT_PERIOD = 60  # за 60 секунд (1 минута)
+
+# Настройки для проверки браузера для BrowserChallengeMiddleware
+BROWSER_CHALLENGE_COOKIE_NAME = 'browser_verified'
+BROWSER_CHALLENGE_COOKIE_VALUE = 'passed_v1'  # Можно менять значение при обновлении логики
+BROWSER_CHALLENGE_COOKIE_AGE = 60 * 60 * 24 * 7  # Срок жизни cookie (например, 1 неделя в секундах)
+BROWSER_CHALLENGE_URL = '/browser-challenge/'  # URL страницы проверки
+BROWSER_VALIDATION_URL = '/browser-challenge/validate/'  # URL для AJAX-запроса валидации
 
 ROOT_URLCONF = 'S3_manager.urls'
 

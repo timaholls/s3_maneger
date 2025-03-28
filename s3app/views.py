@@ -9,6 +9,8 @@ from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse, HttpResponse
 from botocore.exceptions import ClientError
 from django import forms
+from .forms import LoginForm  # ... другие формы ...
+from .captcha import Captcha  # <-- Импортируем класс Captcha
 
 from .models import UserPermission, S3ActionLog
 from .forms import (
@@ -17,30 +19,69 @@ from .forms import (
 )
 from .s3_service import S3Service
 
+from django.conf import settings
+from django.http import HttpResponse, JsonResponse  # Добавляем JsonResponse
+from django.shortcuts import render, redirect  # Убедитесь, что render импортирован
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect  # Для CSRF
+from django.views.decorators.http import require_http_methods  # Для ограничения методов
+
 
 def login_view(request):
-    """Авторизация пользователя"""
+    """Авторизация пользователя с CAPTCHA"""
     if request.user.is_authenticated:
         return redirect('s3app:browser')
+
+    captcha_data = None  # Инициализируем
 
     if request.method == 'POST':
         form = LoginForm(request.POST)
         if form.is_valid():
             username = form.cleaned_data['username']
             password = form.cleaned_data['password']
-            user = authenticate(request, username=username, password=password)
-            if user is not None:
-                login(request, user)
-                # Получаем URL для перенаправления после авторизации
-                next_url = request.GET.get('next', 's3app:browser')
-                messages.success(request, f'Добро пожаловать, {username}!')
-                return redirect(next_url)
-            else:
-                messages.error(request, 'Неверное имя пользователя или пароль.')
-    else:
-        form = LoginForm()
+            user_captcha = form.cleaned_data['captcha_input']
 
-    return render(request, 'login.html', {'form': form})
+            # --- ПРОВЕРКА CAPTCHA ---
+            stored_captcha = request.session.get('captcha_text')
+            # Удаляем CAPTCHA из сессии после попытки, чтобы предотвратить повторное использование
+            request.session.pop('captcha_text', None)
+
+            if Captcha.verify_captcha(user_captcha, stored_captcha):
+                # CAPTCHA верна, пытаемся аутентифицировать
+                user = authenticate(request, username=username, password=password)
+                if user is not None:
+                    login(request, user)
+                    next_url = request.GET.get('next', 's3app:browser')
+                    messages.success(request, f'Добро пожаловать, {username}!')
+                    return redirect(next_url)
+                else:
+                    messages.error(request, 'Неверное имя пользователя или пароль.')
+                    # Генерируем новую CAPTCHA для следующей попытки
+                    captcha_data = Captcha.generate_captcha()
+                    request.session['captcha_text'] = captcha_data['captcha_text']
+            else:
+                # CAPTCHA неверна
+                messages.error(request, 'Неверный текст с картинки (CAPTCHA).')
+                # Генерируем новую CAPTCHA для следующей попытки
+                captcha_data = Captcha.generate_captcha()
+                request.session['captcha_text'] = captcha_data['captcha_text']
+        else:
+            # Форма невалидна (например, не заполнено поле)
+            # Генерируем новую CAPTCHA, т.к. страница будет перерисована
+            captcha_data = Captcha.generate_captcha()
+            request.session['captcha_text'] = captcha_data['captcha_text']
+
+    else:  # GET запрос
+        form = LoginForm()
+        # Генерируем CAPTCHA для отображения на странице
+        captcha_data = Captcha.generate_captcha()
+        request.session['captcha_text'] = captcha_data['captcha_text']
+
+    # Передаем данные CAPTCHA в контекст (изображение нужно только для GET или при ошибке POST)
+    context = {
+        'form': form,
+        'captcha_image': captcha_data['captcha_image'] if captcha_data else None
+    }
+    return render(request, 'login.html', context)
 
 
 def logout_view(request):
@@ -49,11 +90,46 @@ def logout_view(request):
     messages.success(request, 'Вы успешно вышли из системы.')
     return redirect('s3app:login')
 
+@ensure_csrf_cookie # Устанавливает CSRF cookie, чтобы JS мог его прочитать
+def browser_challenge_page_view(request):
+    """Отображает страницу проверки браузера."""
+    # next_url = request.GET.get('next', '/') # Можно передать в контекст, если нужно
+    return render(request, 'browser_challenge.html') # Убедитесь, что шаблон существует
+
+@csrf_protect # Требует валидный CSRF токен для POST
+@require_http_methods(["POST"]) # Разрешаем только POST
+def browser_challenge_validate_view(request):
+    """Обрабатывает AJAX-запрос от JS и устанавливает cookie."""
+    try:
+        # Здесь можно добавить дополнительную проверку, если нужно
+        # Например, проверить данные из request.body
+        # import json
+        # data = json.loads(request.body)
+        # if data.get('verification_signal') != 'running_js':
+        #    return JsonResponse({'error': 'Invalid signal'}, status=400)
+
+        # Создаем успешный ответ (без содержимого)
+        response = HttpResponse(status=204) # 204 No Content
+
+        # Устанавливаем cookie
+        response.set_cookie(
+            key=settings.BROWSER_CHALLENGE_COOKIE_NAME,
+            value=settings.BROWSER_CHALLENGE_COOKIE_VALUE,
+            max_age=settings.BROWSER_CHALLENGE_COOKIE_AGE,
+            secure=request.is_secure(), # True, если HTTPS
+            httponly=True, # Недоступен для JS (безопаснее)
+            samesite='Lax' # Защита от CSRF для cookie
+        )
+        return response
+
+    except Exception as e:
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 @login_required
 def browser_view(request, path=''):
     path = path.rstrip('/')
     s3_service = S3Service()
+    search_query = request.GET.get('q', '').strip()  # Keep query separate
 
     context = {
         'current_path': path,
@@ -61,40 +137,54 @@ def browser_view(request, path=''):
         'breadcrumbs': _get_breadcrumbs(path),
         'folder_form': CreateFolderForm(),
         'upload_form': UploadFileForm(),
+        'search_query': search_query,  # Pass search query to template
+        'is_search_view': bool(search_query),  # Flag for template
+        'search_results': [],  # Initialize search results list
+        'page_obj': None,  # Initialize page_obj
     }
 
     try:
-        import os
-
-        search_query = request.GET.get('q', '').strip().lower()
-        result = s3_service.list_objects(request.user, path, delimiter=None)
-
-        # Убедимся, что имя файла — это basename
-        for f in result['files']:
-            f['name'] = os.path.basename(f['name'])
-
         if search_query:
-            result['files'] = [f for f in result['files'] if search_query in f['name'].lower()]
-            result['directories'] = [d for d in result['directories'] if search_query in d['name'].lower()]
+            # --- SEARCH LOGIC ---
+            context['search_results'] = s3_service.search_objects(
+                request.user,
+                prefix=path,
+                query=search_query,
+                max_results=200  # Limit the number of search results shown
+            )
+            if not context['search_results']:
+                messages.info(request,
+                              f"Файлы, содержащие '{search_query}', не найдены в '{path or 'Корневой директории'}' и подпапках.")
 
-        from django.core.paginator import Paginator
-        all_items = result['directories'] + result['files']
-        paginator = Paginator(all_items, 10)
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
+        else:
+            # --- BROWSE LOGIC ---
+            result = s3_service.list_objects(request.user, path)  # Standard listing
 
-        context['page_obj'] = page_obj
-        context['search_query'] = search_query
+            # Combine directories and files for pagination
+            all_items = result['directories'] + result['files']
+
+            from django.core.paginator import Paginator  # Keep Paginator import
+
+            paginator = Paginator(all_items, 15)  # Adjust items per page if needed
+            page_number = request.GET.get('page')
+            context['page_obj'] = paginator.get_page(page_number)
 
     except PermissionDenied as e:
         messages.error(request, str(e))
+        # Redirect to root if permission denied on a subpath, unless already at root
         if path:
+            # Decide where to redirect: root or parent? Parent might also be denied. Root is safer.
             return redirect('s3app:browser')
+        # If denied at root, just show the error on the root page (handled by template)
     except ClientError as e:
-        messages.error(request, f'Ошибка при получении списка объектов: {str(e)}')
+        error_message = f'Ошибка при взаимодействии с S3: {str(e)}'
+        # Check for specific S3 errors if needed
+        # if e.response['Error']['Code'] == '...':
+        messages.error(request, error_message)
+        # Log the detailed error for admin/debugging
+        print(f"S3 ClientError in browser_view (path: {path}, query: {search_query}): {e}")
 
     return render(request, 'browser.html', context)
-
 
 
 @login_required
@@ -255,9 +345,32 @@ def user_create(request):
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            messages.success(request, f'Пользователь {user.username} успешно создан')
+            user = form.save()  # This saves the user with hashed password
+
+            # --- START: ADD DEFAULT PERMISSION ---
+            if user:  # Check if user was created successfully
+                try:
+                    UserPermission.objects.create(
+                        user=user,
+                        folder_path='',  # Empty string represents the root directory
+                        can_read=True,  # Grant read access
+                        can_write=False,  # Explicitly deny write access by default
+                        can_delete=False  # Explicitly deny delete access by default
+                    )
+                    messages.success(request, f'Пользователь {user.username} успешно создан.')
+                    messages.info(request,
+                                  f'Пользователю {user.username} предоставлены права на чтение/скачивание по умолчанию для всего хранилища.')
+                except Exception as e:
+                    # Handle potential errors during permission creation (e.g., database issues)
+                    messages.error(request,
+                                   f'Пользователь {user.username} создан, но произошла ошибка при назначении прав по умолчанию: {e}')
+                    # Optionally delete the user if default permission fails? Or just log it.
+                    # user.delete() # Uncomment if you want user creation to be atomic with permission creation
+            # --- END: ADD DEFAULT PERMISSION ---
+
             return redirect('s3app:user_list')
+        else:
+            messages.error(request, 'Пожалуйста, исправьте ошибки в форме.')
     else:
         form = UserCreationForm()
 
@@ -364,15 +477,16 @@ def _get_breadcrumbs(path):
         return []
 
     breadcrumbs = [{'name': 'Корень', 'path': ''}]
-    parts = path.split('/')
+    # Ensure splitting handles multiple slashes correctly if _normalize_path didn't catch all
+    parts = list(filter(None, path.split('/')))
 
     current_path = ''
     for part in parts:
-        if part:
-            current_path = f"{current_path}/{part}" if current_path else part
-            breadcrumbs.append({
-                'name': part,
-                'path': current_path
-            })
+        # current_path = f"{current_path}/{part}" if current_path else part
+        current_path = os.path.join(current_path, part)  # Safer path joining
+        breadcrumbs.append({
+            'name': part,
+            'path': current_path
+        })
 
     return breadcrumbs

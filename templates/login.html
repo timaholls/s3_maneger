@@ -6,6 +6,15 @@
 <div class="login-form">
     <h2 class="mb-4 text-center">Вход в S3 Менеджер</h2>
 
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
     <form method="post">
         {% csrf_token %}
 
@@ -29,6 +38,24 @@
             {% endif %}
         </div>
 
+        {# --- ДОБАВЛЕНО ОТОБРАЖЕНИЕ CAPTCHA --- #}
+        {% if captcha_image %}
+        <div class="mb-3 captcha-container">
+             <div class="mb-2">
+                 <img src="data:image/png;base64,{{ captcha_image }}" alt="CAPTCHA Image" class="captcha-image">
+                 {# Можно добавить кнопку обновления CAPTCHA (потребует JS и отдельного view) #}
+             </div>
+             <label for="{{ form.captcha_input.id_for_label }}" class="form-label">{{ form.captcha_input.label }}</label>
+            {{ form.captcha_input }}
+            {% if form.captcha_input.errors %}
+            <div class="invalid-feedback d-block">
+                {% for error in form.captcha_input.errors %}{{ error }}{% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        {# -------------------------------------- #}
+
         {% if form.non_field_errors %}
         <div class="alert alert-danger">
             {% for error in form.non_field_errors %}{{ error }}{% endfor %}
@@ -40,4 +67,23 @@
         </div>
     </form>
 </div>
+
+{# Небольшой стиль для изображения CAPTCHA #}
+<style>
+.captcha-image {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    display: block; /* Чтобы занимало всю ширину контейнера */
+    max-width: 100%; /* Адаптивность */
+    height: auto;
+}
+.login-form {
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 30px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+</style>
 {% endblock %}

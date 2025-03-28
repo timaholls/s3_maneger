@@ -8,6 +8,11 @@ urlpatterns = [
     path('', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
 
+    # --- Маршруты для проверки браузера ---
+    path('browser-challenge/', views.browser_challenge_page_view, name='browser_challenge_page'),
+    path('browser-challenge/validate/', views.browser_challenge_validate_view, name='browser_challenge_validate'),
+
+
     # Маршруты для работы с файлами/папками в S3
     path('', views.browser_view, name='browser'),
     path('browser/', views.browser_view, name='browser'),  # для корня
@@ -31,3 +36,4 @@ urlpatterns = [
     # Маршруты для просмотра логов
     path('logs/', views.action_logs, name='action_logs'),
 ]
+from django.views.generic.base import RedirectView

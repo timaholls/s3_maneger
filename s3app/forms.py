@@ -13,7 +13,12 @@ class LoginForm(forms.Form):
         label="Пароль",
         widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Пароль'})
     )
-
+    # --- ДОБАВЛЕНО ПОЛЕ CAPTCHA ---
+    captcha_input = forms.CharField(
+        label="Введите текст с картинки",
+        required=True,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'CAPTCHA'})
+    )
 
 class CreateFolderForm(forms.Form):
     """Форма для создания новой папки"""

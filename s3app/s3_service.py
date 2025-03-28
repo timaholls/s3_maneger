@@ -48,19 +48,39 @@ class S3Service:
         permissions = UserPermission.objects.filter(user=user)
 
         # Проверяем права для указанной папки и всех родительских папок
-        path_parts = folder_path.split('/')
-        for i in range(len(path_parts) + 1):
-            check_path = '/'.join(path_parts[:i])
-            for perm in permissions:
-                if perm.folder_path == check_path:
-                    if required_permission == 'read' and perm.can_read:
-                        return True
-                    if required_permission == 'write' and perm.can_write:
-                        return True
-                    if required_permission == 'delete' and perm.can_delete:
-                        return True
+        # Начинаем с самого глубокого пути и идем вверх
+        check_path = folder_path
+        while True:
+            # print(f"Checking permission '{required_permission}' for user '{user.username}' on path '{check_path}'") # Debug print
+            # Оптимизация: Получаем права для текущего пути за один запрос
+            perm_for_path = permissions.filter(folder_path=check_path).first()
+            if perm_for_path:
+                # print(f"Found perm for '{check_path}': read={perm_for_path.can_read}, write={perm_for_path.can_write}, delete={perm_for_path.can_delete}") # Debug print
+                if required_permission == 'read' and perm_for_path.can_read:
+                    return True
+                if required_permission == 'write' and perm_for_path.can_write:
+                    return True
+                if required_permission == 'delete' and perm_for_path.can_delete:
+                    return True
+                # Если нашли права, но нужного нет, и это не корень - идем выше
+                # Если нашли права, но нужного нет, и это корень - доступ запрещен
 
+            # Если дошли до корня ('') и права не найдены или не подходят
+            if check_path == '':
+                 # print(f"Reached root, permission denied for '{required_permission}' on '{folder_path}'") # Debug print
+                 return False
+
+            # Переходим к родительской папке
+            parent_path = '/'.join(check_path.split('/')[:-1])
+            # Предотвращаем зацикливание, если split('/')[:-1] дает тот же путь (маловероятно)
+            if parent_path == check_path:
+                 # print(f"Parent path same as current path, stopping check. Permission denied.") # Debug print
+                 return False
+            check_path = parent_path
+
+        # Если цикл завершился без return True (не должно произойти из-за проверки check_path == '')
         return False
+
 
     def log_action(self, user, action_type, object_path, success=True, ip_address=None, details=None):
         """Логирование действий пользователя"""
@@ -74,151 +94,298 @@ class S3Service:
         )
 
     def list_objects(self, user, prefix='', delimiter='/'):
-        """Получение списка объектов в директории"""
-        if not self.check_permission(user, prefix, 'read'):
+        """Получение списка объектов в директории (с пагинацией S3)"""
+        normalized_prefix = self._normalize_path(prefix)
+
+        if not self.check_permission(user, normalized_prefix, 'read'):
             raise PermissionDenied("У вас нет прав для просмотра содержимого этой папки")
 
+        # Если префикс не пустой и не заканчивается на '/', добавляем '/'
+        # Это важно для корректной работы Delimiter
+        s3_prefix = normalized_prefix
+        if s3_prefix and not s3_prefix.endswith('/'):
+            s3_prefix += '/'
+
+        result = {
+            'directories': [],
+            'files': []
+        }
+        processed_dirs = set()
+
         try:
-            # Если префикс не пустой и не заканчивается на '/', добавляем '/'
-            if prefix and not prefix.endswith('/'):
-                prefix = prefix + '/'
+            paginator = self.s3_client.get_paginator('list_objects_v2')
+            pages = paginator.paginate(
+                Bucket=self.bucket_name,
+                Prefix=s3_prefix,
+                Delimiter=delimiter  # Keep delimiter for browsing
+            )
 
-            kwargs = {
-                'Bucket': self.bucket_name,
-                'Prefix': prefix,
-            }
+            for page in pages:
+                # Получаем общие префиксы (директории)
+                if 'CommonPrefixes' in page:
+                    for common_prefix in page['CommonPrefixes']:
+                        prefix_path = common_prefix['Prefix']
+                        # Проверяем, не обработали ли уже эту директорию
+                        if prefix_path not in processed_dirs:
+                            # Извлекаем имя последней части пути
+                            dir_name = prefix_path.rstrip('/').split('/')[-1]
+                            result['directories'].append({
+                                'name': dir_name,
+                                'path': prefix_path.rstrip('/') # Сохраняем путь без слеша на конце для консистентности
+                            })
+                            processed_dirs.add(prefix_path)
+                # Получаем содержимое (файлы и "пустые" объекты папок)
+                if 'Contents' in page:
+                    for item in page['Contents']:
+                        item_key = item['Key']
 
-            if delimiter:
-                kwargs['Delimiter'] = delimiter
+                        # Пропускаем сам объект текущей директории (если он есть)
+                        # Например, при prefix='folder/' может вернуться объект с Key='folder/'
+                        if item_key == s3_prefix:
+                            continue
 
-            response = self.s3_client.list_objects_v2(**kwargs)
+                        # Извлекаем имя файла/объекта относительно текущего префикса
+                        relative_name = item_key
+                        if s3_prefix:
+                             # Убедимся, что заменяем только в начале строки
+                            if relative_name.startswith(s3_prefix):
+                                relative_name = relative_name[len(s3_prefix):]
 
-            # Логируем действие
-            self.log_action(user, 'read', prefix)
+                        # Если после удаления префикса осталась пустая строка - пропускаем
+                        if not relative_name:
+                            continue
 
-            # Форматируем результат
-            result = {
-                'directories': [],
-                'files': []
-            }
+                        # Пропускаем "подпапки", если они представлены как объекты (например, 'subdir/')
+                        # Они уже должны быть обработаны через CommonPrefixes
+                        # Также пропускаем, если имя содержит '/', но не является файлом (размер 0 и оканчивается на '/')
+                        # Это может произойти, если Delimiter не сработал ожидаемо или объект создан некорректно
+                        if relative_name.endswith('/') and item['Size'] == 0:
+                            # Дополнительно проверим, нет ли уже такой директории из CommonPrefixes
+                            dir_path_check = item_key.rstrip('/')
+                            if not any(d['path'] == dir_path_check for d in result['directories']):
+                                # Если вдруг папка не пришла в CommonPrefixes, добавим ее
+                                dir_name = relative_name.rstrip('/')
+                                result['directories'].append({
+                                    'name': dir_name,
+                                    'path': dir_path_check
+                                })
+                                processed_dirs.add(item_key) # Добавляем полный ключ с /
+                            continue # Пропускаем добавление в files
 
-            # Получаем общие префиксы (директории)
-            if 'CommonPrefixes' in response:
-                for common_prefix in response['CommonPrefixes']:
-                    prefix_path = common_prefix['Prefix']
-                    dir_name = os.path.basename(os.path.dirname(prefix_path))
-                    result['directories'].append({
-                        'name': dir_name or prefix_path.rstrip('/').split('/')[-1],
-                        'path': prefix_path
-                    })
+                        # Если это не папка, добавляем в файлы
+                        result['files'].append({
+                            'name': relative_name, # Имя относительно текущей папки
+                            'path': item_key,      # Полный путь (Key) от корня бакета
+                            'size': item['Size'],
+                            'last_modified': item['LastModified']
+                        })
 
-            # Получаем содержимое (файлы)
-            if 'Contents' in response:
-                for item in response['Contents']:
-                    # Пропускаем элемент, если его ключ совпадает с префиксом
-                    # (в S3 директории представлены как объекты с именем, оканчивающимся на '/')
-                    if item['Key'] == prefix:
-                        continue
+            # Логируем успешное действие после получения всех данных
+            self.log_action(user, 'list', s3_prefix or '(root)')  # Changed action type slightly
 
-                    # Убираем префикс из имени файла
-                    file_name = item['Key']
-                    if prefix:
-                        file_name = file_name.replace(prefix, '', 1)
-
-                    # Пропускаем "каталоги"
-                    if file_name.endswith('/'):
-                        continue
-
-                    result['files'].append({
-                        'name': file_name,
-                        'path': item['Key'],
-                        'size': item['Size'],
-                        'last_modified': item['LastModified']
-                    })
+            result['directories'].sort(key=lambda x: x['name'])
+            result['files'].sort(key=lambda x: x['name'])
 
             return result
         except ClientError as e:
             # Логируем неудачное действие
-            self.log_action(user, 'read', prefix, success=False, details=str(e))
+            self.log_action(user, 'read', s3_prefix or '(root)', success=False, details=str(e))
             raise
+        except PermissionDenied as e: # Перехватываем PermissionDenied, чтобы залогировать его
+            self.log_action(user, 'read', s3_prefix or '(root)', success=False, details=f"Permission denied: {str(e)}")
+            raise # Пробрасываем исключение дальше
 
-    def create_folder(self, user, folder_path):
-        """Создание новой папки (директории) в S3"""
-        if not self.check_permission(user, folder_path, 'write'):
-            raise PermissionDenied("У вас нет прав для создания папки")
+    def search_objects(self, user, prefix='', query='', max_results=200):
+        """Рекурсивный поиск объектов (файлов) по имени в указанной директории и поддиректориях."""
+        normalized_prefix = self._normalize_path(prefix)
+        query_lower = query.lower().strip()
 
-        # Нормализуем путь и добавляем '/' в конец
-        folder_path = self._normalize_path(folder_path)
-        if not folder_path.endswith('/'):
-            folder_path += '/'
+        if not query_lower:
+            return []  # Return empty if query is empty
+
+        # Check permission for the starting path of the search
+        if not self.check_permission(user, normalized_prefix, 'read'):
+            # Log the failed attempt due to permissions before raising
+            self.log_action(user, 'search', f"{normalized_prefix} (query: {query})", success=False,
+                            details="Permission denied to read search path")
+            raise PermissionDenied(f"У вас нет прав для поиска в папке '{normalized_prefix or 'Корень'}'")
+
+        s3_prefix = normalized_prefix
+        if s3_prefix and not s3_prefix.endswith('/'):
+            s3_prefix += '/'
+
+        found_items = []
+        scanned_count = 0  # To potentially limit scans later if needed
 
         try:
-            # Создаем пустой объект с '/' в конце имени, что представляет собой директорию в S3
+            paginator = self.s3_client.get_paginator('list_objects_v2')
+            # **IMPORTANT: No Delimiter specified for recursive listing**
+            pages = paginator.paginate(
+                Bucket=self.bucket_name,
+                Prefix=s3_prefix
+            )
+
+            for page in pages:
+                if 'Contents' in page:
+                    for item in page['Contents']:
+                        scanned_count += 1
+                        item_key = item['Key']
+                        item_name = os.path.basename(item_key)  # Get only the filename
+
+                        # Skip the directory object itself if it appears
+                        if item_key == s3_prefix or item_key.endswith('/'):
+                            continue
+
+                        # Check if the filename contains the query (case-insensitive)
+                        if query_lower in item_name.lower():
+                            # Optional: Check read permission on the specific parent folder of the found file
+                            # This adds overhead but ensures fine-grained access control on results
+                            # file_parent_folder = os.path.dirname(item_key)
+                            # if not self.check_permission(user, file_parent_folder, 'read'):
+                            #    continue # Skip if no permission for the specific subfolder
+
+                            found_items.append({
+                                'name': item_name,  # Just the filename
+                                'path': item_key,  # Full S3 key needed for actions
+                                'display_path': item_key,  # Path to show the user (can be formatted later)
+                                'size': item['Size'],
+                                'last_modified': item['LastModified']
+                            })
+
+                            # Stop if we have enough results
+                            if len(found_items) >= max_results:
+                                break  # Stop processing this page
+                # Stop iterating through pages if we hit the limit
+                if len(found_items) >= max_results:
+                    break
+
+            # Log the search action
+            self.log_action(user, 'search', f"{s3_prefix or '(root)'} (query: {query})", success=True,
+                            details=f"Found {len(found_items)} items (scanned approx {scanned_count})")
+
+            # Sort results by full path for consistency
+            found_items.sort(key=lambda x: x['path'])
+
+            return found_items
+
+        except ClientError as e:
+            self.log_action(user, 'search', f"{s3_prefix or '(root)'} (query: {query})", success=False, details=str(e))
+            raise  # Re-raise the exception
+        except PermissionDenied as e:  # Should be caught earlier, but just in case
+            self.log_action(user, 'search', f"{s3_prefix or '(root)'} (query: {query})", success=False,
+                            details=f"Permission denied during search: {str(e)}")
+            raise
+    def create_folder(self, user, folder_path):
+        """Создание новой папки (директории) в S3"""
+        # Нормализуем путь ДО проверки прав
+        normalized_path = self._normalize_path(folder_path)
+        # Права проверяем на родительскую папку
+        parent_path = os.path.dirname(normalized_path)
+
+        if not self.check_permission(user, parent_path, 'write'):
+             # Если нет прав на запись в родительскую, проверяем права на саму папку (вдруг создаем папку, на которую уже дали права)
+             # Это менее типичный сценарий, но возможный
+            if not self.check_permission(user, normalized_path, 'write'):
+                raise PermissionDenied("У вас нет прав для создания папки в этом расположении")
+
+        # Добавляем '/' в конец для S3
+        s3_folder_key = normalized_path
+        if not s3_folder_key.endswith('/'):
+            s3_folder_key += '/'
+
+        try:
+            # Проверяем, существует ли уже объект с таким ключом
+            try:
+                self.s3_client.head_object(Bucket=self.bucket_name, Key=s3_folder_key)
+                # Если head_object успешен, папка (или файл с таким именем!) уже существует
+                return {
+                    'success': False,
+                    'message': f"Папка или файл с именем '{normalized_path}' уже существует."
+                }
+            except ClientError as e:
+                # Если получаем 404, значит объекта нет - это то, что нам нужно
+                if e.response['Error']['Code'] == '404':
+                    pass
+                else:
+                    # Если другая ошибка при проверке - пробрасываем ее
+                    raise
+
+            # Создаем пустой объект с '/' в конце имени
             self.s3_client.put_object(
                 Bucket=self.bucket_name,
-                Key=folder_path,
+                Key=s3_folder_key,
                 Body=''
             )
 
             # Логируем действие
-            self.log_action(user, 'create_folder', folder_path)
+            self.log_action(user, 'create_folder', s3_folder_key)
 
             return {
                 'success': True,
-                'message': f"Папка '{folder_path}' успешно создана"
+                'message': f"Папка '{normalized_path}' успешно создана" # Показываем пользователю путь без /
             }
         except ClientError as e:
             # Логируем неудачное действие
-            self.log_action(user, 'create_folder', folder_path, success=False, details=str(e))
+            self.log_action(user, 'create_folder', s3_folder_key, success=False, details=str(e))
             raise
 
     def delete_folder(self, user, folder_path):
         """Удаление папки и всего её содержимого из S3"""
-        if not self.check_permission(user, folder_path, 'delete'):
-            raise PermissionDenied("У вас нет прав для удаления папки")
+        normalized_path = self._normalize_path(folder_path)
 
-        # Нормализуем путь и добавляем '/' в конец
-        folder_path = self._normalize_path(folder_path)
-        if not folder_path.endswith('/'):
-            folder_path += '/'
+        # Права проверяем на саму папку, которую удаляем
+        if not self.check_permission(user, normalized_path, 'delete'):
+            raise PermissionDenied("У вас нет прав для удаления этой папки")
+
+        # Добавляем '/' в конец, чтобы использовать как префикс
+        s3_prefix = normalized_path
+        if not s3_prefix.endswith('/'):
+            s3_prefix += '/'
 
         try:
             # Список объектов для удаления
             objects_to_delete = []
 
-            # Получаем список всех объектов с указанным префиксом
+            # Используем пагинатор для получения ВСЕХ объектов с этим префиксом
             paginator = self.s3_client.get_paginator('list_objects_v2')
-            pages = paginator.paginate(Bucket=self.bucket_name, Prefix=folder_path)
+            pages = paginator.paginate(Bucket=self.bucket_name, Prefix=s3_prefix)
 
             for page in pages:
                 if 'Contents' in page:
                     for obj in page['Contents']:
                         objects_to_delete.append({'Key': obj['Key']})
 
-            # Если объекты найдены, удаляем их
+            # Если объекты найдены, удаляем их пачкой (до 1000 за раз)
+            deleted_count = 0
             if objects_to_delete:
-                self.s3_client.delete_objects(
-                    Bucket=self.bucket_name,
-                    Delete={'Objects': objects_to_delete}
-                )
+                 # Разделяем на чанки по 1000 (максимум для delete_objects)
+                for i in range(0, len(objects_to_delete), 1000):
+                    chunk = objects_to_delete[i:i + 1000]
+                    delete_response = self.s3_client.delete_objects(
+                        Bucket=self.bucket_name,
+                        Delete={'Objects': chunk}#, 'Quiet': True} # Quiet можно убрать для логов ошибок
+                    )
+                    deleted_count += len(chunk) # Считаем отправленные на удаление
+                    # Можно добавить проверку delete_response на наличие 'Errors'
 
-            # Логируем действие
-            self.log_action(user, 'delete_folder', folder_path)
+            # Логируем действие (даже если папка была пуста)
+            self.log_action(user, 'delete_folder', s3_prefix)
 
             return {
                 'success': True,
-                'message': f"Папка '{folder_path}' успешно удалена",
-                'deleted_objects_count': len(objects_to_delete)
+                'message': f"Папка '{normalized_path}' и ее содержимое ({deleted_count} объектов) успешно удалены",
+                'deleted_objects_count': deleted_count
             }
         except ClientError as e:
             # Логируем неудачное действие
-            self.log_action(user, 'delete_folder', folder_path, success=False, details=str(e))
+            self.log_action(user, 'delete_folder', s3_prefix, success=False, details=str(e))
             raise
 
     def upload_file(self, user, file_obj, destination_path):
         """Загрузка файла в S3"""
+        normalized_destination_path = self._normalize_path(destination_path)
         # Получаем директорию, в которую загружается файл
-        folder_path = os.path.dirname(destination_path)
+        folder_path = os.path.dirname(normalized_destination_path)
 
         if not self.check_permission(user, folder_path, 'write'):
             raise PermissionDenied("У вас нет прав для загрузки файлов в эту папку")
@@ -228,26 +395,33 @@ class S3Service:
             self.s3_client.upload_fileobj(
                 file_obj,
                 self.bucket_name,
-                destination_path
+                normalized_destination_path # Используем нормализованный путь
             )
 
             # Логируем действие
-            self.log_action(user, 'upload', destination_path)
+            self.log_action(user, 'upload', normalized_destination_path)
 
             return {
                 'success': True,
-                'message': f"Файл '{os.path.basename(destination_path)}' успешно загружен",
-                'path': destination_path
+                'message': f"Файл '{os.path.basename(normalized_destination_path)}' успешно загружен",
+                'path': normalized_destination_path
             }
         except ClientError as e:
             # Логируем неудачное действие
-            self.log_action(user, 'upload', destination_path, success=False, details=str(e))
+            self.log_action(user, 'upload', normalized_destination_path, success=False, details=str(e))
             raise
 
     def delete_file(self, user, file_path):
         """Удаление файла из S3"""
+        normalized_file_path = self._normalize_path(file_path)
         # Получаем директорию, в которой находится файл
-        folder_path = os.path.dirname(file_path)
+        folder_path = os.path.dirname(normalized_file_path)
+
+        # Проверяем, не является ли путь папкой (оканчивается на '/')
+        if normalized_file_path.endswith('/'):
+             self.log_action(user, 'delete', normalized_file_path, success=False, details="Attempted to delete a folder using delete_file method.")
+             raise ValueError("Для удаления папок используйте метод delete_folder")
+
 
         if not self.check_permission(user, folder_path, 'delete'):
             raise PermissionDenied("У вас нет прав для удаления файлов из этой папки")
@@ -256,25 +430,31 @@ class S3Service:
             # Удаляем файл из S3
             self.s3_client.delete_object(
                 Bucket=self.bucket_name,
-                Key=file_path
+                Key=normalized_file_path # Используем нормализованный путь
             )
 
             # Логируем действие
-            self.log_action(user, 'delete', file_path)
+            self.log_action(user, 'delete', normalized_file_path)
 
             return {
                 'success': True,
-                'message': f"Файл '{os.path.basename(file_path)}' успешно удален"
+                'message': f"Файл '{os.path.basename(normalized_file_path)}' успешно удален"
             }
         except ClientError as e:
             # Логируем неудачное действие
-            self.log_action(user, 'delete', file_path, success=False, details=str(e))
+            self.log_action(user, 'delete', normalized_file_path, success=False, details=str(e))
             raise
 
     def generate_download_url(self, user, file_path, expires_in=3600):
         """Генерация временной ссылки для скачивания файла"""
+        normalized_file_path = self._normalize_path(file_path)
         # Получаем директорию, в которой находится файл
-        folder_path = os.path.dirname(file_path)
+        folder_path = os.path.dirname(normalized_file_path)
+
+        # Проверяем, не является ли путь папкой (оканчивается на '/')
+        if normalized_file_path.endswith('/'):
+             self.log_action(user, 'download', normalized_file_path, success=False, details="Attempted to download a folder.")
+             raise ValueError("Невозможно скачать папку, только файлы.")
 
         if not self.check_permission(user, folder_path, 'read'):
             raise PermissionDenied("У вас нет прав для скачивания файлов из этой папки")
@@ -283,12 +463,12 @@ class S3Service:
             # Генерируем временную ссылку для скачивания
             url = self.s3_client.generate_presigned_url(
                 'get_object',
-                Params={'Bucket': self.bucket_name, 'Key': file_path},
+                Params={'Bucket': self.bucket_name, 'Key': normalized_file_path},
                 ExpiresIn=expires_in
             )
 
             # Логируем действие
-            self.log_action(user, 'download', file_path)
+            self.log_action(user, 'download', normalized_file_path)
 
             return {
                 'success': True,
@@ -297,16 +477,14 @@ class S3Service:
             }
         except ClientError as e:
             # Логируем неудачное действие
-            self.log_action(user, 'download', file_path, success=False, details=str(e))
+            self.log_action(user, 'download', normalized_file_path, success=False, details=str(e))
             raise
 
     def _normalize_path(self, path):
-        """Нормализация пути к объекту/директории"""
-        # Удаляем лишние слэши в начале пути
-        path = path.lstrip('/')
-
-        # Если путь пустой, возвращаем корневую директорию
+        """Нормализация пути к объекту/директории.
+           Удаляет начальные/конечные слеши и множественные слеши."""
         if not path:
             return ''
-
+        # Заменяем множественные слеши на один
+        path = '/'.join(filter(None, path.split('/')))
         return path
