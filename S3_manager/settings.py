@@ -58,8 +58,8 @@ RATE_LIMIT_PERIOD = 60  # за 60 секунд (1 минута)
 BROWSER_CHALLENGE_COOKIE_NAME = 'browser_verified'
 BROWSER_CHALLENGE_COOKIE_VALUE = 'passed_v1'  # Можно менять значение при обновлении логики
 BROWSER_CHALLENGE_COOKIE_AGE = 60 * 60 * 24 * 7  # Срок жизни cookie (например, 1 неделя в секундах)
-BROWSER_CHALLENGE_URL = '/browser-challenge/'  # URL страницы проверки
-BROWSER_VALIDATION_URL = '/browser-challenge/validate/'  # URL для AJAX-запроса валидации
+BROWSER_CHALLENGE_URL = '/manager/browser-challenge/'  # Updated with /manager/ prefix
+BROWSER_VALIDATION_URL = '/manager/browser-challenge/validate/'  # Updated with /manager/ prefix
 
 ROOT_URLCONF = 'S3_manager.urls'
 
@@ -136,6 +136,6 @@ if os.environ.get('USE_S3', 'False') == 'True':
     AWS_S3_SIGNATURE_VERSION = 's3v4'
 
 # Login & Logout URLs
-LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/login/'
+LOGIN_URL = '/manager/login/'  # Updated with /manager/ prefix
+LOGIN_REDIRECT_URL = '/manager/browser/'  # Updated to point to browser explicitly
+LOGOUT_REDIRECT_URL = '/manager/login/'  # Updated with /manager/ prefix

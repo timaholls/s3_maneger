@@ -19,7 +19,7 @@ function getCookie(name) {
 
 // Функция для выполнения проверки
 async function runBrowserCheck() {
-    const validationUrl = '/browser-challenge/validate/'; // URL валидации из settings.py
+    const validationUrl = '/manager/browser-challenge/validate/'; // Updated with /manager/ prefix
     const csrfToken = getCookie('csrftoken'); // Получаем CSRF токен
 
     const loader = document.getElementById('loader');
@@ -44,7 +44,7 @@ async function runBrowserCheck() {
         if (response.ok) {
             // Успех! Сервер установил cookie. Перенаправляем пользователя.
             const urlParams = new URLSearchParams(window.location.search);
-            const nextUrl = urlParams.get('next') || '/'; // Получаем исходный URL или идем в корень
+            const nextUrl = urlParams.get('next') || '/manager/browser/'; // Updated to browser path
             console.log('Browser verified. Redirecting to:', nextUrl);
             window.location.href = nextUrl; // Перенаправляем
         } else {

@@ -21,10 +21,10 @@ class BrowserChallengeMiddleware:
             settings.STATIC_URL, # Исключаем статику
             settings.MEDIA_URL if hasattr(settings, 'MEDIA_URL') else None, # Исключаем медиа
             '/admin/', # Исключаем админку
+            '/manager/login/', # Exclude login page to prevent redirect loops
         ]
         # Убираем None из списка, если MEDIA_URL не задан
         self.excluded_paths = [p for p in self.excluded_paths if p is not None]
-
 
     def __call__(self, request):
         # Проверяем, нужно ли пропускать этот путь

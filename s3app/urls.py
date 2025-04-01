@@ -1,20 +1,20 @@
 from django.urls import path
 from . import views
+from django.views.generic.base import RedirectView
 
 app_name = 's3app'
 
 urlpatterns = [
     # Маршруты для авторизации
-    path('', views.login_view, name='login'),
+    path('', RedirectView.as_view(pattern_name='s3app:login'), name='index'),  # Redirect root to login
+    path('login/', views.login_view, name='login'),  # Explicit login path
     path('logout/', views.logout_view, name='logout'),
 
     # --- Маршруты для проверки браузера ---
     path('browser-challenge/', views.browser_challenge_page_view, name='browser_challenge_page'),
     path('browser-challenge/validate/', views.browser_challenge_validate_view, name='browser_challenge_validate'),
 
-
     # Маршруты для работы с файлами/папками в S3
-    path('', views.browser_view, name='browser'),
     path('browser/', views.browser_view, name='browser'),  # для корня
     path('browser/<path:path>/', views.browser_view, name='browser_path'),
     path('create-folder/', views.create_folder, name='create_folder'),
@@ -36,4 +36,3 @@ urlpatterns = [
     # Маршруты для просмотра логов
     path('logs/', views.action_logs, name='action_logs'),
 ]
-from django.views.generic.base import RedirectView
