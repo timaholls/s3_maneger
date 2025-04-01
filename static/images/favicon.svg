@@ -1,10 +1,12 @@
-<?xml version="1.0" encoding="utf-8"?><!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
-<svg width="800px" height="800px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M22 22L2 22" stroke="#1C274C" stroke-width="1.5" stroke-linecap="round"/>
-<path d="M21 22V6C21 4.11438 21 3.17157 20.4143 2.58579C19.8285 2 18.8857 2 17 2H15C13.1144 2 12.1716 2 11.5858 2.58579C11.1143 3.05733 11.0223 3.76022 11.0044 5" stroke="#1C274C" stroke-width="1.5"/>
-<path d="M15 22V9C15 7.11438 15 6.17157 14.4142 5.58579C13.8284 5 12.8856 5 11 5H7C5.11438 5 4.17157 5 3.58579 5.58579C3 6.17157 3 7.11438 3 9V22" stroke="#1C274C" stroke-width="1.5"/>
-<path d="M9 22V19" stroke="#1C274C" stroke-width="1.5" stroke-linecap="round"/>
-<path d="M6 8H12" stroke="#1C274C" stroke-width="1.5" stroke-linecap="round"/>
-<path d="M6 11H12" stroke="#1C274C" stroke-width="1.5" stroke-linecap="round"/>
-<path d="M6 14H12" stroke="#1C274C" stroke-width="1.5" stroke-linecap="round"/>
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4361ee" />
+      <stop offset="100%" stop-color="#3a0ca3" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#gradient)" />
+  <path d="M 128,192 L 384,192 L 336,304 L 272,304 L 272,384 L 240,384 L 240,304 L 176,304 Z" fill="white" />
+  <circle cx="256" cy="128" r="32" fill="white" />
 </svg>

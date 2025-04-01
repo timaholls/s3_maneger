@@ -7,25 +7,39 @@ class LoginForm(forms.Form):
     """Форма для авторизации пользователя"""
     username = forms.CharField(
         label="Имя пользователя",
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Имя пользователя'})
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Введите имя пользователя',
+            'autocomplete': 'username'
+        })
     )
     password = forms.CharField(
         label="Пароль",
-        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Пароль'})
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Введите пароль',
+            'autocomplete': 'current-password'
+        })
     )
-    # --- ДОБАВЛЕНО ПОЛЕ CAPTCHA ---
     captcha_input = forms.CharField(
         label="Введите текст с картинки",
         required=True,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'CAPTCHA'})
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Введите CAPTCHA'
+        })
     )
+
 
 class CreateFolderForm(forms.Form):
     """Форма для создания новой папки"""
     folder_name = forms.CharField(
         label="Название папки",
         max_length=100,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Название папки'})
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Введите название папки'
+        })
     )
 
 
@@ -33,7 +47,9 @@ class UploadFileForm(forms.Form):
     """Форма для загрузки файла"""
     file = forms.FileField(
         label="Выберите файл",
-        widget=forms.FileInput(attrs={'class': 'form-control'})
+        widget=forms.FileInput(attrs={
+            'class': 'form-control'
+        })
     )
 
 
@@ -43,11 +59,22 @@ class UserPermissionForm(forms.ModelForm):
         model = UserPermission
         fields = ['user', 'folder_path', 'can_read', 'can_write', 'can_delete']
         widgets = {
-            'user': forms.Select(attrs={'class': 'form-control'}),
-            'folder_path': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Путь к папке'}),
-            'can_read': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'can_write': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'can_delete': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'user': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'folder_path': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Путь к папке (например, folder/subfolder/)'
+            }),
+            'can_read': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'can_write': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'can_delete': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
         }
 
 
@@ -55,22 +82,48 @@ class UserCreationForm(forms.ModelForm):
     """Форма для создания пользователя"""
     password1 = forms.CharField(
         label='Пароль',
-        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Пароль'})
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Введите пароль',
+            'autocomplete': 'new-password'
+        })
     )
     password2 = forms.CharField(
         label='Подтверждение пароля',
-        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Подтверждение пароля'})
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Подтвердите пароль',
+            'autocomplete': 'new-password'
+        })
     )
 
     class Meta:
         model = User
         fields = ['username', 'email', 'first_name', 'last_name', 'is_active']
         widgets = {
-            'username': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Имя пользователя'}),
-            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email'}),
-            'first_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Имя'}),
-            'last_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Фамилия'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'username': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Имя пользователя',
+                'autocomplete': 'username'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Email адрес',
+                'autocomplete': 'email'
+            }),
+            'first_name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Имя',
+                'autocomplete': 'given-name'
+            }),
+            'last_name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Фамилия',
+                'autocomplete': 'family-name'
+            }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
         }
 
     def clean_password2(self):
@@ -89,19 +142,32 @@ class UserCreationForm(forms.ModelForm):
             user.save()
         return user
 
+
 from django.contrib.auth.forms import PasswordChangeForm as AuthPasswordChangeForm
 
 class CustomPasswordChangeForm(AuthPasswordChangeForm):
     """Кастомная форма смены пароля с Bootstrap классами"""
     old_password = forms.CharField(
         label="Старый пароль",
-        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'current-password'})
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'autocomplete': 'current-password',
+            'placeholder': 'Введите текущий пароль'
+        })
     )
     new_password1 = forms.CharField(
         label="Новый пароль",
-        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'})
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'autocomplete': 'new-password',
+            'placeholder': 'Введите новый пароль'
+        })
     )
     new_password2 = forms.CharField(
         label="Подтверждение нового пароля",
-        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'})
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'autocomplete': 'new-password',
+            'placeholder': 'Подтвердите новый пароль'
+        })
     )

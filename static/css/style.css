@@ -1,0 +1,394 @@
+:root {
+    /* Light Theme Variables */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-tertiary: #e9ecef;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-muted: #adb5bd;
+    --border-color: #dee2e6;
+    --primary-color: #4361ee;
+    --secondary-color: #3f37c9;
+    --success-color: #4cc9f0;
+    --danger-color: #f72585;
+    --warning-color: #f8961e;
+    --info-color: #4895ef;
+    --link-color: #4361ee;
+    --navbar-bg: #4361ee;
+    --navbar-text: #ffffff;
+    --card-bg: #ffffff;
+    --card-border: #dee2e6;
+    --input-bg: #ffffff;
+    --input-text: #212529;
+    --table-stripe: rgba(67, 97, 238, 0.03);
+    --table-hover: rgba(67, 97, 238, 0.05);
+    --folder-color: #f8961e;
+    --file-color: #4895ef;
+    --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    --footer-bg: #4361ee;
+    --footer-text: #ffffff;
+}
+
+[data-theme="dark"] {
+    /* Dark Theme Variables */
+    --bg-primary: #121212;
+    --bg-secondary: #1e1e1e;
+    --bg-tertiary: #252525;
+    --text-primary: #e9ecef;
+    --text-secondary: #adb5bd;
+    --text-muted: #6c757d;
+    --border-color: #333333;
+    --primary-color: #4361ee;
+    --secondary-color: #3f37c9;
+    --success-color: #2ac3ff;
+    --danger-color: #f72585;
+    --warning-color: #f8961e;
+    --info-color: #4895ef;
+    --link-color: #4895ef;
+    --navbar-bg: #121212;
+    --navbar-text: #ffffff;
+    --card-bg: #1e1e1e;
+    --card-border: #333333;
+    --input-bg: #252525;
+    --input-text: #e9ecef;
+    --table-stripe: rgba(67, 97, 238, 0.1);
+    --table-hover: rgba(67, 97, 238, 0.15);
+    --folder-color: #f8961e;
+    --file-color: #4895ef;
+    --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.4);
+    --footer-bg: #121212;
+    --footer-text: #ffffff;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.content {
+    flex: 1;
+}
+
+/* Navbar styling */
+.navbar {
+    background-color: var(--navbar-bg) !important;
+    box-shadow: var(--shadow-sm);
+    padding: 0.75rem 1rem;
+}
+
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.navbar-dark .navbar-nav .nav-link {
+    color: var(--navbar-text);
+    opacity: 0.85;
+    transition: opacity 0.2s;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover {
+    opacity: 1;
+}
+
+.dropdown-menu {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    box-shadow: var(--shadow-md);
+}
+
+.dropdown-item {
+    color: var(--text-primary);
+}
+
+.dropdown-item:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--primary-color);
+}
+
+/* Sidebar styling */
+.sidebar {
+    min-height: calc(100vh - 62px);
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+}
+
+/* Card styling */
+.card {
+    background-color: var(--card-bg);
+    border-color: var(--card-border);
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s, box-shadow 0.2s;
+    margin-bottom: 1.5rem;
+    border-radius: 0.5rem;
+}
+
+.card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.card-header {
+    background-color: var(--bg-secondary);
+    border-bottom-color: var(--border-color);
+    padding: 1rem 1.25rem;
+}
+
+.card-body {
+    padding: 1.25rem;
+}
+
+/* Table styling */
+.table {
+    color: var(--text-primary);
+}
+
+.table thead th {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.table tbody td {
+    border-color: var(--border-color);
+    vertical-align: middle;
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--table-hover);
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: var(--table-stripe);
+}
+
+/* File browser styling */
+.file-list {
+    list-style: none;
+    padding: 0;
+}
+
+.file-item, .folder-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.file-item:hover, .folder-item:hover {
+    background-color: var(--table-hover);
+}
+
+.file-icon, .folder-icon {
+    margin-right: 0.75rem;
+    font-size: 1.2em;
+}
+
+.folder-icon {
+    color: var(--folder-color);
+}
+
+.file-icon {
+    color: var(--file-color);
+}
+
+.file-name, .folder-name {
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Action buttons */
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn {
+    border-radius: 0.375rem;
+    font-weight: 500;
+    padding: 0.375rem 0.75rem;
+    transition: all 0.2s;
+}
+
+.btn-sm {
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+.btn-success {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+.btn-warning {
+    background-color: var(--warning-color);
+    border-color: var(--warning-color);
+}
+
+.btn-info {
+    background-color: var(--info-color);
+    border-color: var(--info-color);
+}
+
+.btn-outline-primary {
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--primary-color);
+    color: #fff;
+}
+
+/* Form styling */
+.form-control {
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    border-color: var(--border-color);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-control:focus {
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+}
+
+/* Breadcrumbs */
+.breadcrumb {
+    background-color: var(--bg-tertiary);
+    border-radius: 0.375rem;
+    padding: 0.75rem 1rem;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    color: var(--text-secondary);
+}
+
+.breadcrumb-item a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+.breadcrumb-item.active {
+    color: var(--text-secondary);
+}
+
+/* Login form */
+.login-form {
+    max-width: 400px;
+    margin: 4rem auto;
+    padding: 2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background-color: var(--card-bg);
+    box-shadow: var(--shadow-md);
+}
+
+/* Footer */
+footer {
+    background-color: var(--footer-bg);
+    color: var(--footer-text);
+    padding: 1.5rem 0;
+    margin-top: auto;
+    text-align: center;
+    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Alerts */
+.alert {
+    border-radius: 0.375rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid transparent;
+}
+
+.alert-dismissible .btn-close {
+    color: inherit;
+}
+
+/* Theme toggler */
+.theme-toggle {
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.5rem;
+}
+
+.theme-toggle i {
+    font-size: 1.2rem;
+    color: var(--navbar-text);
+}
+
+/* Additional responsive tweaks */
+@media (max-width: 768px) {
+    .login-form {
+        margin: 2rem auto;
+        padding: 1.5rem;
+    }
+
+    .card-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+
+    .table td, .table th {
+        padding: 0.5rem;
+    }
+}
+
+/* Pagination */
+.pagination {
+    justify-content: center;
+    margin-top: 1.5rem;
+}
+
+.page-link {
+    color: var(--primary-color);
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+}
+
+.page-link:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--primary-color);
+    border-color: var(--border-color);
+}
+
+.page-item.active .page-link {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}

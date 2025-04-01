@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,80 +10,20 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <style>
-        body {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .content {
-            flex: 1;
-        }
-        .sidebar {
-            min-height: calc(100vh - 56px);
-            background-color: #f8f9fa;
-            border-right: 1px solid #dee2e6;
-        }
-        .login-form {
-            max-width: 400px;
-            margin: 100px auto;
-            padding: 20px;
-            border: 1px solid #dee2e6;
-            border-radius: 5px;
-            background-color: #fff;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        .header-title {
-            margin: 0;
-            line-height: 1.5;
-        }
-        .file-list {
-            list-style: none;
-            padding: 0;
-        }
-        .file-item, .folder-item {
-            padding: 8px 10px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            align-items: center;
-            transition: background-color 0.2s;
-        }
-        .file-item:hover, .folder-item:hover {
-            background-color: #f8f9fa;
-        }
-        .file-icon, .folder-icon {
-            margin-right: 10px;
-            font-size: 1.2em;
-        }
-        .folder-icon {
-            color: #ffc107;
-        }
-        .file-icon {
-            color: #6c757d;
-        }
-        .file-name, .folder-name {
-            flex-grow: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .action-buttons {
-            display: flex;
-            gap: 5px;
-        }
-        .breadcrumb-item a {
-            text-decoration: none;
-        }
-    </style>
+    <!-- Google Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
 
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 's3app:browser' %}">S3 Менеджер</a>
+            <a class="navbar-brand" href="{% url 's3app:browser' %}">
+                <i class="fas fa-cloud mr-2"></i> S3 Менеджер
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -108,6 +48,7 @@
                     </li>
                     {% endif %}
                     {% endif %}
+                    <!-- Переключатель темы добавляется через JavaScript -->
                 </ul>
                 <ul class="navbar-nav">
                     {% if user.is_authenticated %}
@@ -116,16 +57,20 @@
                             <i class="fas fa-user"></i> {{ user.username }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                            {# --- Новая ссылка --- #}
-                            <li><a class="dropdown-item" href="{% url 's3app:password_change' %}">Сменить пароль</a></li>
-                            <li><hr class="dropdown-divider"></li> {# Необязательный разделитель #}
-                            {# --- Конец новой ссылки --- #}
-                            <li><a class="dropdown-item" href="{% url 's3app:logout' %}">Выйти</a></li>
+                            <li><a class="dropdown-item" href="{% url 's3app:password_change' %}">
+                                <i class="fas fa-key me-2"></i> Сменить пароль
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 's3app:logout' %}">
+                                <i class="fas fa-sign-out-alt me-2"></i> Выйти
+                            </a></li>
                         </ul>
                     </li>
                     {% else %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 's3app:login' %}">Войти</a>
+                        <a class="nav-link" href="{% url 's3app:login' %}">
+                            <i class="fas fa-sign-in-alt me-1"></i> Войти
+                        </a>
                     </li>
                     {% endif %}
                 </ul>
@@ -138,6 +83,15 @@
     <div class="container mt-3">
         {% for message in messages %}
         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {% if message.tags == 'success' %}
+                <i class="fas fa-check-circle me-2"></i>
+            {% elif message.tags == 'error' or message.tags == 'danger' %}
+                <i class="fas fa-exclamation-circle me-2"></i>
+            {% elif message.tags == 'warning' %}
+                <i class="fas fa-exclamation-triangle me-2"></i>
+            {% elif message.tags == 'info' %}
+                <i class="fas fa-info-circle me-2"></i>
+            {% endif %}
             {{ message }}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
@@ -151,7 +105,7 @@
     </div>
 
     <!-- Footer -->
-    <footer class="bg-dark text-light py-3 mt-auto">
+    <footer class="py-3 mt-auto">
         <div class="container text-center">
             <p class="mb-0">&copy; {% now "Y" %} S3 Менеджер - Система управления файлами для TimeWeb S3</p>
         </div>
@@ -159,6 +113,8 @@
 
     <!-- Bootstrap JS with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Theme Script -->
+    <script src="/static/js/theme.js"></script>
 
     {% block extra_js %}{% endblock %}
 </body>
