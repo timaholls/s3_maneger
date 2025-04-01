@@ -1,4 +1,4 @@
-// static/js/browser_verify.js
+// static/js/browser_verify_s3.js
 
 // Функция для получения значения cookie по имени (нужна для CSRF)
 function getCookie(name) {
@@ -19,8 +19,9 @@ function getCookie(name) {
 
 // Функция для выполнения проверки
 async function runBrowserCheck() {
-    const validationUrl = '/manager/browser-challenge/validate/'; // Updated with /manager/ prefix
+    const validationUrl = '/browser-challenge/validate/'; // Updated with /manager/ prefix
     const csrfToken = getCookie('csrftoken'); // Получаем CSRF токен
+    console.log('csrfToken', csrfToken);
 
     const loader = document.getElementById('loader');
     const errorMessage = document.getElementById('error-message');

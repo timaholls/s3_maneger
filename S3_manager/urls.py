@@ -5,7 +5,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('manager/', include('s3app.urls')),  # Changed from '' to 'manager/'
+    path('', include('s3app.urls')),  # Changed from '' to 'manager/'
 ]
 
 if settings.DEBUG:

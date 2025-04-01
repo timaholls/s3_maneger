@@ -90,40 +90,65 @@ def logout_view(request):
     messages.success(request, 'Вы успешно вышли из системы.')
     return redirect('s3app:login')
 
-@ensure_csrf_cookie # Устанавливает CSRF cookie, чтобы JS мог его прочитать
+
+@ensure_csrf_cookie  # Устанавливает CSRF cookie, чтобы JS мог его прочитать
 def browser_challenge_page_view(request):
     """Отображает страницу проверки браузера."""
-    # next_url = request.GET.get('next', '/') # Можно передать в контекст, если нужно
-    return render(request, 'browser_challenge.html') # Убедитесь, что шаблон существует
+    # Добавим next_url в контекст, чтобы его можно было использовать в шаблоне
+    next_url = request.GET.get('next', '/manager/')
+    return render(request, 'browser_challenge.html', {'next_url': next_url})
 
-@csrf_protect # Требует валидный CSRF токен для POST
-@require_http_methods(["POST"]) # Разрешаем только POST
+
+@ensure_csrf_cookie  # <-- ADD THIS DECORATOR
+@csrf_protect  # Требует валидный CSRF токен для POST
+@require_http_methods(["POST"])  # Разрешаем только POST
 def browser_challenge_validate_view(request):
     """Обрабатывает AJAX-запрос от JS и устанавливает cookie."""
-    try:
-        # Здесь можно добавить дополнительную проверку, если нужно
-        # Например, проверить данные из request.body
-        # import json
-        # data = json.loads(request.body)
-        # if data.get('verification_signal') != 'running_js':
-        #    return JsonResponse({'error': 'Invalid signal'}, status=400)
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
 
-        # Создаем успешный ответ (без содержимого)
-        response = HttpResponse(status=204) # 204 No Content
+    try:
+        # Логирование для отладки
+        logger.info(f"Browser challenge validation request received from {request.META.get('REMOTE_ADDR')}")
+
+        # Проверка данных запроса
+        try:
+            data = json.loads(request.body)
+            logger.info(f"Received data: {data}")
+        except json.JSONDecodeError:
+            logger.warning("Invalid JSON in request body")
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        # Создаем успешный ответ
+        response = JsonResponse({'status': 'success'})
 
         # Устанавливаем cookie
+        cookie_name = settings.BROWSER_CHALLENGE_COOKIE_NAME
+        cookie_value = settings.BROWSER_CHALLENGE_COOKIE_VALUE
+        cookie_age = settings.BROWSER_CHALLENGE_COOKIE_AGE
+
+        logger.info(f"Setting cookie: {cookie_name}={cookie_value} (max_age={cookie_age})")
+
         response.set_cookie(
-            key=settings.BROWSER_CHALLENGE_COOKIE_NAME,
-            value=settings.BROWSER_CHALLENGE_COOKIE_VALUE,
-            max_age=settings.BROWSER_CHALLENGE_COOKIE_AGE,
-            secure=request.is_secure(), # True, если HTTPS
-            httponly=True, # Недоступен для JS (безопаснее)
-            samesite='Lax' # Защита от CSRF для cookie
+            key=cookie_name,
+            value=cookie_value,
+            max_age=cookie_age,
+            secure=request.is_secure(),  # True, если HTTPS
+            httponly=False,  # Доступен для JS для отладки
+            samesite='Lax'  # Защита от CSRF для cookie
         )
+
+        # Добавляем заголовки для отладки
+        response['X-Browser-Challenge'] = 'passed'
+
+        logger.info("Browser challenge validation successful")
         return response
 
     except Exception as e:
-        return JsonResponse({'error': 'Internal server error'}, status=500)
+        logger.exception(f"Browser challenge validation error: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
 
 @login_required
 def browser_view(request, path=''):

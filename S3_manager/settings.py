@@ -14,7 +14,9 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-change-th
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = ['manager.bytegate.ru', 'localhost']
+
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -58,8 +60,8 @@ RATE_LIMIT_PERIOD = 60  # за 60 секунд (1 минута)
 BROWSER_CHALLENGE_COOKIE_NAME = 'browser_verified'
 BROWSER_CHALLENGE_COOKIE_VALUE = 'passed_v1'  # Можно менять значение при обновлении логики
 BROWSER_CHALLENGE_COOKIE_AGE = 60 * 60 * 24 * 7  # Срок жизни cookie (например, 1 неделя в секундах)
-BROWSER_CHALLENGE_URL = '/manager/browser-challenge/'  # Updated with /manager/ prefix
-BROWSER_VALIDATION_URL = '/manager/browser-challenge/validate/'  # Updated with /manager/ prefix
+BROWSER_CHALLENGE_URL = '/browser-challenge/'  # Updated with /manager/ prefix
+BROWSER_VALIDATION_URL = '/browser-challenge/validate/'  # Updated with /manager/ prefix
 
 ROOT_URLCONF = 'S3_manager.urls'
 
@@ -135,7 +137,9 @@ if os.environ.get('USE_S3', 'False') == 'True':
     AWS_S3_ADDRESSING_STYLE = 'virtual'
     AWS_S3_SIGNATURE_VERSION = 's3v4'
 
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # Login & Logout URLs
-LOGIN_URL = '/manager/login/'  # Updated with /manager/ prefix
-LOGIN_REDIRECT_URL = '/manager/browser/'  # Updated to point to browser explicitly
-LOGOUT_REDIRECT_URL = '/manager/login/'  # Updated with /manager/ prefix
+LOGIN_URL = '/login/'  # Updated with /manager/ prefix
+LOGIN_REDIRECT_URL = '/browser/'  # Updated to point to browser explicitly
+LOGOUT_REDIRECT_URL = '/login/'  # Updated with /manager/ prefix

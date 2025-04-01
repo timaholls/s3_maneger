@@ -69,6 +69,17 @@
         .retry-btn:hover {
             background-color: #008c6a;
         }
+
+        .manual-link {
+            margin-top: 20px;
+            color: #00a67e;
+            text-decoration: none;
+            display: none;
+        }
+
+        .manual-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -79,8 +90,17 @@
     <div class="loader" id="loader"></div>
     <div id="error-message"></div>
     <button id="retry-btn" class="retry-btn" onclick="window.location.reload()">Повторить попытку</button>
+    <a id="manual-link" class="manual-link" href="{% url 's3app:login' %}">Перейти на страницу входа вручную</a>
 </div>
 
-<script type="text/javascript" src="{% static 'js/browser_verify.js' %}"></script>
+<script>
+    // Показать ссылку для ручного перехода через 10 секунд
+    setTimeout(function() {
+        document.getElementById('manual-link').style.display = 'block';
+    }, 10000);
+</script>
+
+<script type="text/javascript" src="{% static 'js/browser_verify_s3.js' %}"></script>
+
 </body>
 </html>
