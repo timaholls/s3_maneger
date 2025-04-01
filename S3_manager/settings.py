@@ -14,7 +14,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-change-th
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['manager.bytegate.ru', 'localhost']
+ALLOWED_HOSTS = ['manager.bytegate.ru', 'localhost', '127.0.0.1']
 
 
 
@@ -49,6 +49,8 @@ MIDDLEWARE = [
 
     # Проверка JS при входе
     's3app.middleware.BrowserChallengeMiddleware',
+    # Проверка страницы админа
+    's3app.middleware.AdminAccessMiddleware',  # <-- Укажите правильный путь к классу
 
 ]
 

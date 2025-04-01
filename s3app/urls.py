@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
 from django.views.generic.base import RedirectView
+from django.contrib.auth import views as auth_views
+from .forms import CustomPasswordChangeForm # <-- Импортируйте вашу форму
 
 app_name = 's3app'
 
@@ -25,6 +27,21 @@ urlpatterns = [
     path('upload-file/<path:path>/', views.upload_file, name='upload_file_path'),
     path('delete-file/<path:path>/', views.delete_file, name='delete_file'),
     path('download-file/<path:path>/', views.download_file, name='download_file'),
+
+    # --- Новые URL для смены пароля ---
+    path('password_change/',
+         auth_views.PasswordChangeView.as_view(
+             form_class=CustomPasswordChangeForm,  # <-- Используйте вашу форму
+             template_name='password_change_form.html',
+             success_url='../password_change/done/'
+         ),
+         name='password_change'),
+    path('password_change/done/',
+         auth_views.PasswordChangeDoneView.as_view(
+             template_name='password_change_done.html'
+         ),
+         name='password_change_done'),
+    # --- Конец URL для смены пароля ---
 
     # Маршруты для управления пользователями
     path('users/', views.user_list, name='user_list'),

@@ -88,3 +88,20 @@ class UserCreationForm(forms.ModelForm):
         if commit:
             user.save()
         return user
+
+from django.contrib.auth.forms import PasswordChangeForm as AuthPasswordChangeForm
+
+class CustomPasswordChangeForm(AuthPasswordChangeForm):
+    """Кастомная форма смены пароля с Bootstrap классами"""
+    old_password = forms.CharField(
+        label="Старый пароль",
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'current-password'})
+    )
+    new_password1 = forms.CharField(
+        label="Новый пароль",
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'})
+    )
+    new_password2 = forms.CharField(
+        label="Подтверждение нового пароля",
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'})
+    )

@@ -115,6 +115,10 @@
                             <i class="fas fa-user"></i> {{ user.username }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            {# --- Новая ссылка --- #}
+                            <li><a class="dropdown-item" href="{% url 's3app:password_change' %}">Сменить пароль</a></li>
+                            <li><hr class="dropdown-divider"></li> {# Необязательный разделитель #}
+                            {# --- Конец новой ссылки --- #}
                             <li><a class="dropdown-item" href="{% url 's3app:logout' %}">Выйти</a></li>
                         </ul>
                     </li>

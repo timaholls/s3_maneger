@@ -1,11 +1,12 @@
 # s3app/middleware.py
 import logging
 from django.conf import settings
-from django.shortcuts import redirect
-from django.urls import reverse
 from django.utils.http import urlencode
+from django.shortcuts import redirect
+from django.urls import reverse, NoReverseMatch
 
 logger = logging.getLogger(__name__)
+
 
 class BrowserChallengeMiddleware:
     def __init__(self, get_response):
@@ -18,10 +19,10 @@ class BrowserChallengeMiddleware:
         self.excluded_paths = [
             self.challenge_url,
             self.validation_url,
-            settings.STATIC_URL, # Исключаем статику
-            settings.MEDIA_URL if hasattr(settings, 'MEDIA_URL') else None, # Исключаем медиа
-            '/admin/', # Исключаем админку
-            '/login/', # Exclude login page to prevent redirect loops
+            settings.STATIC_URL,  # Исключаем статику
+            settings.MEDIA_URL if hasattr(settings, 'MEDIA_URL') else None,  # Исключаем медиа
+            '/admin/',  # Исключаем админку
+            '/login/',  # Exclude login page to prevent redirect loops
         ]
         # Убираем None из списка, если MEDIA_URL не задан
         self.excluded_paths = [p for p in self.excluded_paths if p is not None]
@@ -53,3 +54,37 @@ class BrowserChallengeMiddleware:
         else:
             ip = request.META.get('REMOTE_ADDR')
         return ip
+
+
+class AdminAccessMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+        # URL, с которого начинается админ-панель
+        self.admin_url_path = getattr(settings, 'ADMIN_URL', '/admin/')
+        # Имя URL-паттерна для главной страницы вашего приложения (s3app)
+        # Убедитесь, что у вас есть URL-паттерн с name='browser' в s3app/urls.py
+        self.redirect_url_name = 's3app:browser'
+        # Резервный URL, если reverse не сработает
+        self.fallback_redirect_url = '/'
+
+    def __call__(self, request):
+        # Проверяем, начинается ли путь запроса с пути к админке
+        if request.path.startswith(self.admin_url_path):
+            # Проверяем, аутентифицирован ли пользователь и НЕ является ли он staff
+            # Анонимные пользователи также не пройдут проверку is_staff
+            if not request.user.is_staff:
+                # Перенаправляем не-администраторов
+                try:
+                    # Пытаемся получить URL по имени
+                    redirect_url = reverse(self.redirect_url_name)
+                except NoReverseMatch:
+                    # Если имя не найдено, используем резервный URL
+                    redirect_url = self.fallback_redirect_url
+
+                # Выполняем перенаправление
+                return redirect(redirect_url)
+
+        # Если это не админка или пользователь является staff,
+        # продолжаем обработку запроса как обычно
+        response = self.get_response(request)
+        return response

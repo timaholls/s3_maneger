@@ -38,44 +38,63 @@ class S3Service:
 
     def check_permission(self, user, folder_path, required_permission):
         """Проверка прав доступа пользователя к папке"""
+        print(f"--- Checking permission ---")  # DEBUG
+        print(f"User: {user.username} ({user.id})")  # DEBUG
+        print(f"Requested Path: '{folder_path}'")  # DEBUG
+        print(f"Required Permission: '{required_permission}'")  # DEBUG
+
         if user.is_superuser:
+            print("User is superuser. Access granted.")  # DEBUG
             return True
 
         # Нормализуем путь к папке
-        folder_path = self._normalize_path(folder_path)
+        normalized_path = self._normalize_path(folder_path)
+        print(f"Normalized Path: '{normalized_path}'")  # DEBUG
 
         # Получаем все права пользователя
         permissions = UserPermission.objects.filter(user=user)
+        print(
+            f"All permissions found for user: {list(permissions.values_list('folder_path', 'can_read', 'can_write', 'can_delete'))}")  # DEBUG
 
         # Проверяем права для указанной папки и всех родительских папок
-        # Начинаем с самого глубокого пути и идем вверх
-        check_path = folder_path
+        check_path = normalized_path
         while True:
-            # print(f"Checking permission '{required_permission}' for user '{user.username}' on path '{check_path}'") # Debug print
+            print(f"  Checking path: '{check_path}'")  # DEBUG
             # Оптимизация: Получаем права для текущего пути за один запрос
             perm_for_path = permissions.filter(folder_path=check_path).first()
+
             if perm_for_path:
-                # print(f"Found perm for '{check_path}': read={perm_for_path.can_read}, write={perm_for_path.can_write}, delete={perm_for_path.can_delete}") # Debug print
+                print(
+                    f"    Found permission object for '{check_path}': ID={perm_for_path.id}, Read={perm_for_path.can_read}, Write={perm_for_path.can_write}, Delete={perm_for_path.can_delete}")  # DEBUG
                 if required_permission == 'read' and perm_for_path.can_read:
+                    print(f"    Read permission sufficient. Access granted.")  # DEBUG
                     return True
                 if required_permission == 'write' and perm_for_path.can_write:
+                    print(f"    Write permission sufficient. Access granted.")  # DEBUG
                     return True
                 if required_permission == 'delete' and perm_for_path.can_delete:
+                    print(f"    Delete permission sufficient. Access granted.")  # DEBUG
                     return True
-                # Если нашли права, но нужного нет, и это не корень - идем выше
-                # Если нашли права, но нужного нет, и это корень - доступ запрещен
+                # Если нашли права, но нужного нет
+                print(
+                    f"    Permission found for '{check_path}', but not the required '{required_permission}'.")  # DEBUG
+
+            else:
+                print(f"    No specific permission found for path '{check_path}'.")  # DEBUG
 
             # Если дошли до корня ('') и права не найдены или не подходят
             if check_path == '':
-                 # print(f"Reached root, permission denied for '{required_permission}' on '{folder_path}'") # Debug print
-                 return False
+                print(
+                    f"  Reached root (''). Permission check failed for original path '{normalized_path}'. Access denied.")  # DEBUG
+                return False
 
             # Переходим к родительской папке
             parent_path = '/'.join(check_path.split('/')[:-1])
-            # Предотвращаем зацикливание, если split('/')[:-1] дает тот же путь (маловероятно)
+            print(f"  Moving to parent path: '{parent_path}'")  # DEBUG
+            # Предотвращаем зацикливание
             if parent_path == check_path:
-                 # print(f"Parent path same as current path, stopping check. Permission denied.") # Debug print
-                 return False
+                print(f"  Parent path is the same as current path. Stopping check. Access denied.")  # DEBUG
+                return False
             check_path = parent_path
 
         # Если цикл завершился без return True (не должно произойти из-за проверки check_path == '')
@@ -96,7 +115,7 @@ class S3Service:
     def list_objects(self, user, prefix='', delimiter='/'):
         """Получение списка объектов в директории (с пагинацией S3)"""
         normalized_prefix = self._normalize_path(prefix)
-
+        print(normalized_prefix)
         if not self.check_permission(user, normalized_prefix, 'read'):
             raise PermissionDenied("У вас нет прав для просмотра содержимого этой папки")
 
@@ -196,7 +215,7 @@ class S3Service:
             raise # Пробрасываем исключение дальше
 
     def search_objects(self, user, prefix='', query='', max_results=200):
-        """Рекурсивный поиск объектов (файлов) по имени в указанной директории и поддиректориях."""
+        """Рекурсивный поиск объектов (файлов И ПАПОК) по имени в указанной директории и поддиректориях."""
         normalized_prefix = self._normalize_path(prefix)
         query_lower = query.lower().strip()
 
@@ -215,11 +234,11 @@ class S3Service:
             s3_prefix += '/'
 
         found_items = []
-        scanned_count = 0  # To potentially limit scans later if needed
+        scanned_count = 0
 
         try:
             paginator = self.s3_client.get_paginator('list_objects_v2')
-            # **IMPORTANT: No Delimiter specified for recursive listing**
+            # No Delimiter specified for recursive listing
             pages = paginator.paginate(
                 Bucket=self.bucket_name,
                 Prefix=s3_prefix
@@ -230,31 +249,53 @@ class S3Service:
                     for item in page['Contents']:
                         scanned_count += 1
                         item_key = item['Key']
-                        item_name = os.path.basename(item_key)  # Get only the filename
 
-                        # Skip the directory object itself if it appears
-                        if item_key == s3_prefix or item_key.endswith('/'):
+                        # Skip the containing folder object itself (prefix object)
+                        if item_key == s3_prefix:
                             continue
 
-                        # Check if the filename contains the query (case-insensitive)
-                        if query_lower in item_name.lower():
-                            # Optional: Check read permission on the specific parent folder of the found file
-                            # This adds overhead but ensures fine-grained access control on results
-                            # file_parent_folder = os.path.dirname(item_key)
-                            # if not self.check_permission(user, file_parent_folder, 'read'):
-                            #    continue # Skip if no permission for the specific subfolder
+                        # Determine if it's a folder (ends with / and usually size 0)
+                        # We primarily rely on the trailing slash convention
+                        is_folder = item_key.endswith('/')
 
-                            found_items.append({
-                                'name': item_name,  # Just the filename
-                                'path': item_key,  # Full S3 key needed for actions
-                                'display_path': item_key,  # Path to show the user (can be formatted later)
-                                'size': item['Size'],
-                                'last_modified': item['LastModified']
-                            })
+                        # Extract the name part for matching
+                        # For folders 'path/to/folder/', basename needs the key without trailing slash
+                        item_name = os.path.basename(item_key.rstrip('/'))
+
+                        # Skip if somehow the name is empty after stripping/basename
+                        if not item_name:
+                            continue
+
+                        # Check if the item_name (file or folder) contains the query
+                        if query_lower in item_name.lower():
+                            # Optional: Check read permission on the specific parent folder
+                            # parent_folder = os.path.dirname(item_key.rstrip('/'))
+                            # if not self.check_permission(user, parent_folder, 'read'):
+                            #    continue # Skip if no permission
+
+                            # Prepare item data
+                            item_data = {
+                                'name': item_name,           # Just the name part
+                                'path': item_key,           # Full S3 key (needed for actions)
+                                'display_path': item_key,   # Path to show the user (full key)
+                                'is_folder': is_folder,     # Flag to distinguish type
+                            }
+
+                            # Add file-specific or folder-specific data
+                            if is_folder:
+                                item_data['size'] = None # Folders don't have relevant size
+                                # Folders (objects ending in /) do have LastModified,
+                                # but it might be confusing, set to None or keep item['LastModified']
+                                item_data['last_modified'] = None # item['LastModified']
+                            else:
+                                item_data['size'] = item['Size']
+                                item_data['last_modified'] = item['LastModified']
+
+                            found_items.append(item_data)
 
                             # Stop if we have enough results
                             if len(found_items) >= max_results:
-                                break  # Stop processing this page
+                                break # Stop processing this page
                 # Stop iterating through pages if we hit the limit
                 if len(found_items) >= max_results:
                     break
