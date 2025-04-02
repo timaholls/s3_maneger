@@ -47,3 +47,33 @@ class S3ActionLog(models.Model):
 
     def __str__(self):
         return f"{self.user.username if self.user else 'Аноним'} - {self.get_action_type_display()} - {self.object_path}"
+
+
+class IPBlock(models.Model):
+    """Модель для хранения информации о заблокированных IP-адресах"""
+    ip_address = models.GenericIPAddressField(verbose_name="IP адрес")
+    blocked_at = models.DateTimeField(verbose_name="Время блокировки", auto_now_add=True)
+    expires_at = models.DateTimeField(verbose_name="Время окончания блокировки")
+    reason = models.CharField(verbose_name="Причина блокировки", max_length=255)
+    is_active = models.BooleanField(verbose_name="Активна", default=True)
+
+    class Meta:
+        verbose_name = "Блокировка IP"
+        verbose_name_plural = "Блокировки IP"
+        ordering = ['-blocked_at']
+
+    def __str__(self):
+        return f"{self.ip_address} (до {self.expires_at})"
+
+    @property
+    def is_expired(self):
+        """Проверяет, истекла ли блокировка"""
+        from django.utils import timezone
+        return self.expires_at <= timezone.now()
+
+    def save(self, *args, **kwargs):
+        """Переопределение метода save для обновления is_active при истечении срока"""
+        from django.utils import timezone
+        if self.expires_at <= timezone.now():
+            self.is_active = False
+        super().save(*args, **kwargs)

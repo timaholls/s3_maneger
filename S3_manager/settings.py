@@ -54,9 +54,14 @@ MIDDLEWARE = [
 
 ]
 
-# (Опционально) Настройки для  RateLimitMiddleware
+# (Опционально) Настройки для RateLimitMiddleware
 RATE_LIMIT_REQUESTS = 60  # Максимум 60 запросов
 RATE_LIMIT_PERIOD = 60  # за 60 секунд (1 минута)
+
+# Настройки блокировки IP при превышении лимита
+IP_BLOCK_DURATION = 1800  # Блокировка на 30 минут (в секундах)
+IP_BLOCK_THRESHOLD = 3  # Блокировка после 3 нарушений лимита запросов
+TRUSTED_IPS = ['127.0.0.1']  # Список доверенных IP, которые не подлежат ограничениям
 
 # Настройки для проверки браузера для BrowserChallengeMiddleware
 BROWSER_CHALLENGE_COOKIE_NAME = 'browser_verified'
