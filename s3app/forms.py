@@ -55,17 +55,26 @@ class UploadFileForm(forms.Form):
 
 class UserPermissionForm(forms.ModelForm):
     """Форма для назначения прав пользователя"""
+
+    # Explicitly define folder_path to override required status
+    folder_path = forms.CharField(
+        label="Путь к папке в S3",
+        required=False,  # <<< THIS IS THE FIX
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'folder/subfolder/ (пусто = корень)' # Shortened placeholder
+        }),
+        help_text="Путь к папке без начального '/'. Оставьте пустым для корневой папки.",
+        max_length=1024 # Match model max_length if needed
+    )
+
     class Meta:
         model = UserPermission
         fields = ['user', 'folder_path', 'can_read', 'can_write', 'can_delete']
         widgets = {
-            'user': forms.Select(attrs={
-                'class': 'form-select'
-            }),
-            'folder_path': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Путь к папке (например, folder/subfolder/)'
-            }),
+            # Keep user widget definition if needed, although it might be hidden/set in view
+            'user': forms.HiddenInput(), # Assuming user is set in the view, hide it. Use Select if user chooses.
+            # folder_path widget is now defined above
             'can_read': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
             }),

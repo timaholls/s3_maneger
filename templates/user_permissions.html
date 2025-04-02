@@ -4,64 +4,71 @@
 
 {% block content %}
 <div class="container py-4">
-    <h1 class="mb-4">Права доступа: {{ user_obj.username }}</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+         <h1 class="h3 mb-0">Права доступа: {{ user_obj.username }}</h1>
+         {# Button moved below the form card for better flow on mobile #}
+    </div>
 
-    <div class="row">
+
+    <div class="row g-4"> {# Added gap between columns #}
         <!-- Список прав доступа -->
-        <div class="col-md-8">
-            <div class="card mb-4">
+        <div class="col-lg-8"> {# Use lg for breakpoint if preferred #}
+            <div class="card mb-4 mb-lg-0"> {# Remove bottom margin on larger screens #}
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Текущие права доступа</h5>
+                    <h5 class="card-title mb-0 fw-semibold">Текущие права</h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
+                        <table class="table table-hover align-middle mb-0 permissions-table"> {# Added class #}
+                            <thead class="table-light">
                                 <tr>
-                                    <th>Путь к папке</th>
-                                    <th>Чтение</th>
-                                    <th>Запись</th>
-                                    <th>Удаление</th>
-                                    <th>Действия</th>
+                                    <th scope="col">Путь</th>
+                                    <th scope="col" class="text-center">Чтение</th>
+                                    <th scope="col" class="text-center">Запись</th>
+                                    <th scope="col" class="text-center">Удаление</th>
+                                    <th scope="col" class="text-center">Действия</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for perm in permissions %}
                                 <tr>
-                                    <td>{{ perm.folder_path|default:"/" }}</td>
-                                    <td>
+                                    <td data-label="Путь"><code>{{ perm.folder_path|default:"/" }}</code></td>
+                                    <td data-label="Чтение" class="text-center">
                                         {% if perm.can_read %}
-                                        <i class="fas fa-check-circle text-success"></i>
+                                        <i class="fas fa-check-circle text-success" title="Разрешено"></i>
                                         {% else %}
-                                        <i class="fas fa-times-circle text-danger"></i>
+                                        <i class="fas fa-times-circle text-secondary" title="Запрещено"></i> {# Use secondary instead of danger #}
                                         {% endif %}
                                     </td>
-                                    <td>
+                                    <td data-label="Запись" class="text-center">
                                         {% if perm.can_write %}
-                                        <i class="fas fa-check-circle text-success"></i>
+                                        <i class="fas fa-check-circle text-success" title="Разрешено"></i>
                                         {% else %}
-                                        <i class="fas fa-times-circle text-danger"></i>
+                                        <i class="fas fa-times-circle text-secondary" title="Запрещено"></i>
                                         {% endif %}
                                     </td>
-                                    <td>
+                                    <td data-label="Удаление" class="text-center">
                                         {% if perm.can_delete %}
-                                        <i class="fas fa-check-circle text-success"></i>
+                                        <i class="fas fa-check-circle text-success" title="Разрешено"></i>
                                         {% else %}
-                                        <i class="fas fa-times-circle text-danger"></i>
+                                        <i class="fas fa-times-circle text-secondary" title="Запрещено"></i>
                                         {% endif %}
                                     </td>
-                                    <td>
-                                        <a href="{% url 's3app:delete_permission' perm_id=perm.id %}"
-                                           class="btn btn-sm btn-danger"
-                                           onclick="return confirm('Вы уверены, что хотите удалить эти права доступа?')">
-                                            <i class="fas fa-trash"></i>
-                                        </a>
+                                    <td data-label="Действия" class="actions-cell">
+                                         <div class="action-buttons">
+                                             <a href="{% url 's3app:delete_permission' perm_id=perm.id %}"
+                                                class="btn btn-sm btn-danger action-btn"
+                                                title="Удалить право для {{ perm.folder_path|default:'/' }}"
+                                                onclick="return confirm('Вы уверены, что хотите удалить это право доступа?')">
+                                                 <i class="fas fa-trash"></i>
+                                             </a>
+                                         </div>
                                     </td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="5" class="text-center py-3">
-                                        <i class="fas fa-info-circle me-2"></i> Нет назначенных прав доступа
+                                    <td colspan="5" class="text-center py-4"> {# Adjusted colspan #}
+                                        <i class="fas fa-info-circle me-2"></i> Нет назначенных прав доступа.
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -73,21 +80,34 @@
         </div>
 
         <!-- Форма добавления прав -->
-        <div class="col-md-4">
-            <div class="card">
+        <div class="col-lg-4">
+            <div class="card sticky-lg-top" style="top: 1rem;"> {# Make form sticky on large screens #}
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Добавить права доступа</h5>
+                    <h5 class="card-title mb-0 fw-semibold">Добавить/Изменить права</h5>
                 </div>
                 <div class="card-body">
-                    <form method="post">
+                    <form method="post" novalidate>
                         {% csrf_token %}
 
+                        {# Assuming user is set in view and widget is HiddenInput #}
                         {{ form.user }}
 
+                         {# Display non-field errors clearly #}
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger small p-2 mb-3">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
                         <div class="mb-3">
-                            <label for="{{ form.folder_path.id_for_label }}" class="form-label">{{ form.folder_path.label }} *</label>
-                            {{ form.folder_path }}
-                            <small class="form-text text-muted">Путь к папке в S3 без начального слеша. Оставьте пустым для корневой папки.</small>
+                            {# Use field object directly for label, id, help_text #}
+                            <label for="{{ form.folder_path.id_for_label }}" class="form-label fw-medium">{{ form.folder_path.label }}</label>
+                            {{ form.folder_path }} {# Widget defined in forms.py has class #}
+                             {% if form.folder_path.help_text %}
+                                <small class="form-text text-muted d-block mt-1">{{ form.folder_path.help_text }}</small>
+                             {% endif %}
                             {% if form.folder_path.errors %}
                             <div class="invalid-feedback d-block">
                                 {% for error in form.folder_path.errors %}{{ error }}{% endfor %}
@@ -95,45 +115,46 @@
                             {% endif %}
                         </div>
 
-                        <div class="mb-3 form-check">
-                            {{ form.can_read }}
-                            <label class="form-check-label" for="{{ form.can_read.id_for_label }}">
-                                {{ form.can_read.label }}
-                            </label>
-                        </div>
+                        <fieldset class="mb-3">
+                             <legend class="h6 fw-medium fs-sm">Разрешения:</legend>
+                             <div class="form-check mb-2">
+                                 {{ form.can_read }} {# Widget defined in forms.py has class #}
+                                 <label class="form-check-label" for="{{ form.can_read.id_for_label }}">
+                                     Может читать
+                                 </label>
+                             </div>
 
-                        <div class="mb-3 form-check">
-                            {{ form.can_write }}
-                            <label class="form-check-label" for="{{ form.can_write.id_for_label }}">
-                                {{ form.can_write.label }}
-                            </label>
-                        </div>
+                             <div class="form-check mb-2">
+                                 {{ form.can_write }} {# Widget defined in forms.py has class #}
+                                 <label class="form-check-label" for="{{ form.can_write.id_for_label }}">
+                                     Может записывать
+                                 </label>
+                             </div>
 
-                        <div class="mb-3 form-check">
-                            {{ form.can_delete }}
-                            <label class="form-check-label" for="{{ form.can_delete.id_for_label }}">
-                                {{ form.can_delete.label }}
-                            </label>
-                        </div>
+                             <div class="form-check">
+                                 {{ form.can_delete }} {# Widget defined in forms.py has class #}
+                                 <label class="form-check-label" for="{{ form.can_delete.id_for_label }}">
+                                     Может удалять
+                                 </label>
+                             </div>
+                        </fieldset>
 
-                        {% if form.non_field_errors %}
-                        <div class="alert alert-danger">
-                            {% for error in form.non_field_errors %}{{ error }}{% endfor %}
-                        </div>
-                        {% endif %}
 
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                            <button type="submit" class="btn btn-primary">
+                               <i class="fas fa-save me-1"></i> Сохранить права
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
 
-            <div class="d-grid mt-3">
-                <a href="{% url 's3app:user_list' %}" class="btn btn-secondary">
-                    <i class="fas fa-arrow-left me-2"></i> Вернуться к списку пользователей
-                </a>
-            </div>
+             <div class="d-grid mt-3">
+                 <a href="{% url 's3app:user_list' %}" class="btn btn-outline-secondary"> {# Changed to outline #}
+                     <i class="fas fa-arrow-left me-2"></i> Вернуться к пользователям
+                 </a>
+             </div>
+
         </div>
     </div>
 </div>

@@ -1,80 +1,81 @@
 {% extends 'base.html' %}
+{% load humanize %} {# Load if needed for date/time formatting elsewhere, good practice #}
 
 {% block title %}Пользователи - S3 Менеджер{% endblock %}
 
 {% block content %}
 <div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Управление пользователями</h1>
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+        <h1 class="h2 mb-0">Управление пользователями</h1>
         <a href="{% url 's3app:user_create' %}" class="btn btn-primary">
-            <i class="fas fa-user-plus"></i> Создать пользователя
+            <i class="fas fa-user-plus me-1"></i> Создать пользователя
         </a>
     </div>
 
     <div class="card">
-        <div class="card-body">
+        <div class="card-body p-0"> {# Remove padding for full-width table feel #}
             <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
+                <table class="table table-hover align-middle mb-0 user-list-table"> {# Added user-list-table class, removed mb-0 from table itself #}
+                    <thead class="table-light">
                         <tr>
-                            <th>Имя пользователя</th>
-                            <th>Полное имя</th>
-                            <th>Email</th>
-                            <th>Администратор</th>
-                            <th>Активный</th>
-                            <th>Последний вход</th>
-                            <th>Действия</th>
+                            <th scope="col">Имя пользователя</th>
+                            <th scope="col">Полное имя</th>
+                            <th scope="col">Email</th>
+                            <th scope="col" class="text-center">Статус</th> {# Combined Admin/Active conceptually #}
+                            <th scope="col">Последний вход</th>
+                            <th scope="col" class="text-center">Действия</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for user in users %}
                         <tr>
-                            <td>{{ user.username }}</td>
-                            <td>{{ user.get_full_name|default:"-" }}</td>
-                            <td>{{ user.email|default:"-" }}</td>
-                            <td>
+                            <td data-label="Имя пользователя">{{ user.username }}</td>
+                            <td data-label="Полное имя">{{ user.get_full_name|default:"-" }}</td>
+                            <td data-label="Email">{{ user.email|default:"-" }}</td>
+                            <td data-label="Статус" class="text-center">
                                 {% if user.is_superuser %}
-                                <span class="badge bg-danger">Суперпользователь</span>
+                                <span class="badge bg-danger me-1" title="Суперпользователь">Админ <i class="fas fa-crown fa-xs"></i></span>
                                 {% elif user.is_staff %}
-                                <span class="badge bg-warning">Да</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Нет</span>
+                                <span class="badge bg-warning text-dark me-1" title="Администратор">Админ <i class="fas fa-user-shield fa-xs"></i></span>
                                 {% endif %}
-                            </td>
-                            <td>
+
                                 {% if user.is_active %}
-                                <span class="badge bg-success">Активен</span>
+                                <span class="badge bg-success" title="Активен">Активен <i class="fas fa-check-circle fa-xs"></i></span>
                                 {% else %}
-                                <span class="badge bg-danger">Неактивен</span>
+                                <span class="badge bg-secondary" title="Неактивен">Неактивен <i class="fas fa-times-circle fa-xs"></i></span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td data-label="Последний вход">
+                                <span class="text-nowrap">
                                 {% if user.last_login %}
                                 {{ user.last_login|date:"d.m.Y H:i" }}
                                 {% else %}
                                 Никогда
                                 {% endif %}
+                                </span>
                             </td>
-                            <td>
-                                <div class="btn-group">
-                                    <a href="{% url 's3app:user_edit' user_id=user.id %}" class="btn btn-sm btn-primary">
+                            <td data-label="Действия" class="actions-cell"> {# Added actions-cell class #}
+                                <div class="action-buttons"> {# Replaced btn-group #}
+                                    <a href="{% url 's3app:user_edit' user_id=user.id %}" class="btn btn-sm btn-primary action-btn" title="Редактировать {{ user.username }}">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <a href="{% url 's3app:user_permissions' user_id=user.id %}" class="btn btn-sm btn-info">
+                                    <a href="{% url 's3app:user_permissions' user_id=user.id %}" class="btn btn-sm btn-info action-btn" title="Права доступа {{ user.username }}">
                                         <i class="fas fa-key"></i>
                                     </a>
+                                    {# Add delete button if applicable, e.g.: #}
+                                    {# <a href="{% url 's3app:user_delete' user_id=user.id %}" class="btn btn-sm btn-danger action-btn" title="Удалить {{ user.username }}" onclick="return confirm('Вы уверены?')"> #}
+                                    {#     <i class="fas fa-trash"></i> #}
+                                    {# </a> #}
                                 </div>
                             </td>
                         </tr>
-                        {% endfor %}
-
-                        {% if not users %}
+                        {% empty %} {# Use empty instead of if not users #}
                         <tr>
-                            <td colspan="7" class="text-center py-3">
-                                <i class="fas fa-info-circle me-2"></i> Пользователи не найдены
+                            <td colspan="6" class="text-center py-4"> {# Adjusted colspan #}
+                                <i class="fas fa-info-circle me-2"></i> Нет зарегистрированных пользователей.
                             </td>
                         </tr>
-                        {% endif %}
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>

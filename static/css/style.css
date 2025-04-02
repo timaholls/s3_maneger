@@ -8,11 +8,11 @@
     --text-muted: #adb5bd;
     --border-color: #dee2e6;
     --primary-color: #4361ee;
-    --secondary-color: #3f37c9;
-    --success-color: #4cc9f0;
-    --danger-color: #f72585;
-    --warning-color: #f8961e;
-    --info-color: #4895ef;
+    --secondary-color: #6c757d; /* Adjusted for consistency */
+    --success-color: #198754; /* Bootstrap success */
+    --danger-color: #dc3545;  /* Bootstrap danger */
+    --warning-color: #ffc107; /* Bootstrap warning */
+    --info-color: #0dcaf0;    /* Bootstrap info */
     --link-color: #4361ee;
     --navbar-bg: #4361ee;
     --navbar-text: #ffffff;
@@ -21,45 +21,54 @@
     --input-bg: #ffffff;
     --input-text: #212529;
     --table-stripe: rgba(67, 97, 238, 0.03);
-    --table-hover: rgba(67, 97, 238, 0.05);
-    --folder-color: #f8961e;
-    --file-color: #4895ef;
+    --table-hover: rgba(67, 97, 238, 0.07); /* Slightly darker hover */
+    --folder-color: #ffc107; /* Using warning color for folders */
+    --file-color: #0dcaf0;   /* Using info color for files */
     --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
     --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
-    --footer-bg: #4361ee;
-    --footer-text: #ffffff;
+    --footer-bg: #f8f9fa; /* Lighter footer */
+    --footer-text: #6c757d;
+    --control-height: 38px; /* Standard height for controls */
+    --mobile-label-width: 100px; /* Define a width for mobile labels */
 }
 
 [data-theme="dark"] {
     /* Dark Theme Variables */
-    --bg-primary: #121212;
-    --bg-secondary: #1e1e1e;
-    --bg-tertiary: #252525;
+    --bg-primary: #1a1a1a; /* Slightly lighter dark */
+    --bg-secondary: #2a2a2a;
+    --bg-tertiary: #3a3a3a;
     --text-primary: #e9ecef;
     --text-secondary: #adb5bd;
     --text-muted: #6c757d;
-    --border-color: #333333;
-    --primary-color: #4361ee;
-    --secondary-color: #3f37c9;
-    --success-color: #2ac3ff;
-    --danger-color: #f72585;
-    --warning-color: #f8961e;
-    --info-color: #4895ef;
-    --link-color: #4895ef;
-    --navbar-bg: #121212;
+    --border-color: #444444; /* Darker border */
+    --primary-color: #5a75f0; /* Slightly brighter blue */
+    --secondary-color: #adb5bd;
+    --success-color: #20c997; /* Bootstrap success dark */
+    --danger-color: #f74f60;  /* Bootstrap danger dark */
+    --warning-color: #ffcd39; /* Bootstrap warning dark */
+    --info-color: #3dd5f3;    /* Bootstrap info dark */
+    --link-color: #5a75f0;
+    --navbar-bg: #2a2a2a;
     --navbar-text: #ffffff;
-    --card-bg: #1e1e1e;
-    --card-border: #333333;
-    --input-bg: #252525;
+    --card-bg: #2a2a2a;
+    --card-border: #444444;
+    --input-bg: #3a3a3a;
     --input-text: #e9ecef;
-    --table-stripe: rgba(67, 97, 238, 0.1);
-    --table-hover: rgba(67, 97, 238, 0.15);
-    --folder-color: #f8961e;
-    --file-color: #4895ef;
+    --table-stripe: rgba(90, 117, 240, 0.08);
+    --table-hover: rgba(90, 117, 240, 0.15);
+    --folder-color: #ffcd39; /* Dark warning */
+    --file-color: #3dd5f3;   /* Dark info */
     --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3);
     --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.4);
-    --footer-bg: #121212;
-    --footer-text: #ffffff;
+    --footer-bg: #2a2a2a;
+    --footer-text: #adb5bd;
+    --control-height: 38px;
+    --mobile-label-width: 100px;
+}
+
+/* Base styles */
+html {
+    font-size: 16px; /* Base font size */
 }
 
 body {
@@ -68,327 +77,998 @@ body {
     flex-direction: column;
     background-color: var(--bg-primary);
     color: var(--text-primary);
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease;
+    font-weight: 400;
+    line-height: 1.6;
 }
 
-.content {
+main.content {
     flex: 1;
 }
 
-/* Navbar styling */
+/* Navbar */
 .navbar {
-    background-color: var(--navbar-bg) !important;
+    background-color: var(--navbar-bg);
     box-shadow: var(--shadow-sm);
-    padding: 0.75rem 1rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
 }
 
 .navbar-brand {
     font-weight: 700;
     letter-spacing: 0.5px;
+    color: var(--navbar-text);
+}
+.navbar-brand:hover {
+     color: var(--navbar-text);
+     opacity: 0.9;
 }
 
 .navbar-dark .navbar-nav .nav-link {
-    color: var(--navbar-text);
-    opacity: 0.85;
-    transition: opacity 0.2s;
-    padding: 0.5rem 1rem;
+    color: rgba(255, 255, 255, 0.75); /* Slightly muted */
+    transition: color 0.2s ease;
+    padding: 0.5rem 0.75rem;
     font-weight: 500;
+    border-radius: 0.25rem;
 }
 
-.navbar-dark .navbar-nav .nav-link:hover {
-    opacity: 1;
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link.active {
+    color: var(--navbar-text);
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
+.navbar-toggler {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+.navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+
+/* Dropdowns */
 .dropdown-menu {
     background-color: var(--card-bg);
-    border-color: var(--border-color);
+    border-color: var(--card-border);
     box-shadow: var(--shadow-md);
+    padding: 0.5rem 0;
+    font-size: 0.95rem;
 }
 
 .dropdown-item {
     color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+}
+.dropdown-item i {
+    width: 1.25em; /* Ensure icons align */
 }
 
-.dropdown-item:hover {
+.dropdown-item:hover, .dropdown-item:focus {
     background-color: var(--bg-tertiary);
     color: var(--primary-color);
 }
-
-/* Sidebar styling */
-.sidebar {
-    min-height: calc(100vh - 62px);
-    background-color: var(--bg-secondary);
-    border-right: 1px solid var(--border-color);
+.dropdown-divider {
+    border-top-color: var(--border-color);
+    opacity: 0.5;
 }
 
-/* Card styling */
+/* Cards */
 .card {
     background-color: var(--card-bg);
-    border-color: var(--card-border);
+    border: 1px solid var(--card-border);
     box-shadow: var(--shadow-sm);
-    transition: transform 0.2s, box-shadow 0.2s;
+    border-radius: 0.5rem; /* Slightly larger radius */
     margin-bottom: 1.5rem;
-    border-radius: 0.5rem;
-}
-
-.card:hover {
-    box-shadow: var(--shadow-md);
 }
 
 .card-header {
     background-color: var(--bg-secondary);
-    border-bottom-color: var(--border-color);
-    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--card-border);
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap; /* Allow wrapping on small screens */
+    gap: 0.5rem;
+}
+.card-header .header-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
 }
 
 .card-body {
     padding: 1.25rem;
 }
 
-/* Table styling */
+/* Forms & Controls */
+.form-control,
+.form-select,
+.btn {
+    min-height: var(--control-height);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--border-color);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+.form-control-sm, .btn-sm {
+    min-height: calc(var(--control-height) - 6px); /* Adjust sm height */
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.25rem;
+}
+
+.form-control,
+.form-select {
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    width: 100%;
+}
+.form-control:focus,
+.form-select:focus {
+    color: var(--input-text);
+    background-color: var(--input-bg);
+    border-color: var(--primary-color);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-link-color-rgb), .25);
+}
+.form-check-input {
+    width: 1.15em;
+    height: 1.15em;
+    margin-top: 0.1em; /* Align better with text */
+    background-color: var(--input-bg);
+    border-color: var(--border-color);
+}
+.form-check-input:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+
+/* Input Groups */
+.input-group {
+    display: flex;
+    align-items: stretch; /* Make elements fill height */
+}
+.input-group .form-control {
+    flex: 1 1 auto; /* Allow input to grow */
+    min-width: 0; /* Prevent overflow */
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.input-group .btn {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    flex-shrink: 0; /* Prevent button shrinking */
+}
+.input-group > :not(:first-child) {
+    margin-left: -1px; /* Overlap borders */
+}
+input[type="file"].form-control {
+    padding-top: 0.45rem; /* Adjust file input padding slightly */
+}
+
+/* Action Forms (Create/Upload) */
+.action-form .input-group {
+     width: 100%;
+}
+
+/* Browser Search Form */
+.browser-search-form {
+    max-width: 300px; /* Limit width on larger screens */
+    width: 100%; /* Take full width on smaller screens if needed */
+}
+.browser-search-form .form-control-sm {
+    flex-grow: 1;
+}
+
+/* Buttons */
+.btn {
+    font-weight: 500;
+    white-space: nowrap;
+}
+.btn i {
+    vertical-align: middle; /* Align icons */
+    line-height: 1;
+}
+.btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); color: #fff; }
+.btn-primary:hover { background-color: color-mix(in srgb, var(--primary-color) 85%, black); border-color: color-mix(in srgb, var(--primary-color) 80%, black); }
+.btn-secondary { background-color: var(--secondary-color); border-color: var(--secondary-color); color: #fff; }
+.btn-secondary:hover { background-color: color-mix(in srgb, var(--secondary-color) 85%, black); border-color: color-mix(in srgb, var(--secondary-color) 80%, black); }
+.btn-success { background-color: var(--success-color); border-color: var(--success-color); color: #fff; }
+.btn-success:hover { background-color: color-mix(in srgb, var(--success-color) 85%, black); border-color: color-mix(in srgb, var(--success-color) 80%, black); }
+.btn-danger { background-color: var(--danger-color); border-color: var(--danger-color); color: #fff; }
+.btn-danger:hover { background-color: color-mix(in srgb, var(--danger-color) 85%, black); border-color: color-mix(in srgb, var(--danger-color) 80%, black); }
+.btn-outline-primary { color: var(--primary-color); border-color: var(--primary-color); }
+.btn-outline-primary:hover { background-color: var(--primary-color); color: #fff; }
+.btn-outline-secondary { color: var(--secondary-color); border-color: var(--secondary-color); }
+.btn-outline-secondary:hover { background-color: var(--secondary-color); color: #fff; }
+
+/* Action Buttons in Table */
+.action-buttons {
+    display: inline-flex; /* Use inline-flex for alignment */
+    flex-wrap: nowrap;
+    gap: 0.3rem;
+    justify-content: center; /* Center buttons within the cell space */
+    align-items: center;
+}
+.action-btn {
+    width: var(--control-height); /* Make buttons square */
+    height: var(--control-height);
+    padding: 0;
+    font-size: 0.9rem; /* Slightly smaller icon size */
+    flex: 0 0 auto; /* Prevent shrinking/growing */
+}
+.action-btn.btn-sm { /* This applies to multi-action panel, not usually table */
+    width: auto; /* Let sm buttons size naturally */
+    height: calc(var(--control-height) - 6px);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+.action-btn i {
+    margin: 0; /* Reset any inherited margins */
+}
+
+/* Table */
 .table {
     color: var(--text-primary);
-}
-
-.table thead th {
-    background-color: var(--bg-secondary);
     border-color: var(--border-color);
-    color: var(--text-primary);
-    font-weight: 600;
+    margin-bottom: 0; /* Remove default margin */
 }
-
-.table tbody td {
-    border-color: var(--border-color);
+.table th, .table td {
+    padding: 0.75rem; /* Consistent padding */
     vertical-align: middle;
+    border-bottom: 1px solid var(--border-color);
+    line-height: 1.5; /* Ensure text doesn't touch borders */
 }
-
+.table thead th {
+    font-weight: 600;
+    white-space: nowrap;
+    background-color: var(--bg-secondary);
+    border-bottom-width: 2px; /* Thicker bottom border for header */
+    border-top: 0;
+    color: var(--text-primary);
+}
 .table-hover tbody tr:hover {
     background-color: var(--table-hover);
+    color: var(--text-primary); /* Ensure text color stays readable */
 }
-
 .table-striped tbody tr:nth-of-type(odd) {
     background-color: var(--table-stripe);
 }
-
-/* File browser styling */
-.file-list {
-    list-style: none;
-    padding: 0;
-}
-
-.file-item, .folder-item {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border-color);
-    display: flex;
-    align-items: center;
-    transition: background-color 0.2s;
-}
-
-.file-item:hover, .folder-item:hover {
-    background-color: var(--table-hover);
-}
-
-.file-icon, .folder-icon {
-    margin-right: 0.75rem;
-    font-size: 1.2em;
-}
-
-.folder-icon {
-    color: var(--folder-color);
-}
-
-.file-icon {
-    color: var(--file-color);
-}
-
-.file-name, .folder-name {
-    flex-grow: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.table td.actions-cell {
+    text-align: center; /* Center the container */
+    width: 1%; /* Prevent cell from taking too much space */
     white-space: nowrap;
 }
 
-/* Action buttons */
-.action-buttons {
-    display: flex;
-    gap: 0.5rem;
-}
+/* File/Folder Icons & Names */
+.folder-icon { color: var(--folder-color); }
+.file-icon { color: var(--file-color); }
 
-.btn {
-    border-radius: 0.375rem;
-    font-weight: 500;
-    padding: 0.375rem 0.75rem;
-    transition: all 0.2s;
+.file-name-cell {
+    max-width: 350px; /* Limit max width on desktop */
+    min-width: 200px; /* Give it some minimum space */
 }
-
-.btn-sm {
-    border-radius: 0.25rem;
-    padding: 0.25rem 0.5rem;
+.file-name-link {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-primary);
+    text-decoration: none;
+    max-width: 100%; /* Ensure link fits cell */
+    gap: 0.5rem; /* Space between icon and text */
 }
-
-.btn-primary {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
+.file-name-link:hover {
+    color: var(--link-color);
+    text-decoration: underline;
 }
-
-.btn-secondary {
-    background-color: var(--secondary-color);
-    border-color: var(--secondary-color);
-}
-
-.btn-success {
-    background-color: var(--success-color);
-    border-color: var(--success-color);
-}
-
-.btn-danger {
-    background-color: var(--danger-color);
-    border-color: var(--danger-color);
-}
-
-.btn-warning {
-    background-color: var(--warning-color);
-    border-color: var(--warning-color);
-}
-
-.btn-info {
-    background-color: var(--info-color);
-    border-color: var(--info-color);
-}
-
-.btn-outline-primary {
-    color: var(--primary-color);
-    border-color: var(--primary-color);
-}
-
-.btn-outline-primary:hover {
-    background-color: var(--primary-color);
-    color: #fff;
-}
-
-/* Form styling */
-.form-control {
-    background-color: var(--input-bg);
-    color: var(--input-text);
-    border-color: var(--border-color);
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.form-control:focus {
-    background-color: var(--input-bg);
-    color: var(--input-text);
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+.file-name-text, .folder-name-text {
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    max-width: 100%; /* Ensure text truncates within the link */
 }
 
 /* Breadcrumbs */
 .breadcrumb {
     background-color: var(--bg-tertiary);
     border-radius: 0.375rem;
-    padding: 0.75rem 1rem;
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
 }
-
-.breadcrumb-item + .breadcrumb-item::before {
-    color: var(--text-secondary);
-}
-
 .breadcrumb-item a {
     color: var(--link-color);
     text-decoration: none;
 }
-
+.breadcrumb-item a:hover {
+    text-decoration: underline;
+}
 .breadcrumb-item.active {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+.breadcrumb-item + .breadcrumb-item::before {
     color: var(--text-secondary);
 }
 
-/* Login form */
-.login-form {
-    max-width: 400px;
-    margin: 4rem auto;
-    padding: 2rem;
-    border: 1px solid var(--border-color);
+/* Multi-Action Panel */
+.multi-actions {
+    padding: 0.75rem 1rem;
     border-radius: 0.5rem;
-    background-color: var(--card-bg);
-    box-shadow: var(--shadow-md);
+    margin-bottom: 1rem;
+    display: none; /* Hidden by default */
+    align-items: center;
+    flex-wrap: wrap; /* Allow wrapping */
+    gap: 0.75rem;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+}
+.multi-actions.active {
+    display: flex; /* Show when active */
+}
+.multi-actions .selected-count {
+    font-weight: 500;
+    white-space: nowrap;
+}
+.multi-action-buttons {
+    display: flex;
+    flex-wrap: wrap; /* Allow buttons to wrap */
+    gap: 0.5rem;
+}
+
+/* Pagination */
+.pagination-container {
+    margin-top: 1.5rem;
+}
+.pagination {
+    --bs-pagination-color: var(--link-color);
+    --bs-pagination-bg: var(--card-bg);
+    --bs-pagination-border-color: var(--border-color);
+    --bs-pagination-hover-color: var(--link-color);
+    --bs-pagination-hover-bg: var(--bg-tertiary);
+    --bs-pagination-hover-border-color: var(--border-color);
+    --bs-pagination-focus-color: var(--link-color);
+    --bs-pagination-focus-bg: var(--bg-tertiary);
+    --bs-pagination-active-color: #fff;
+    --bs-pagination-active-bg: var(--primary-color);
+    --bs-pagination-active-border-color: var(--primary-color);
+    --bs-pagination-disabled-color: var(--text-muted);
+    --bs-pagination-disabled-bg: var(--bg-secondary);
+    --bs-pagination-disabled-border-color: var(--border-color);
+    --bs-pagination-focus-box-shadow: 0 0 0 0.2rem rgba(var(--bs-link-color-rgb), .25);
+}
+.page-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--control-height); /* Ensure consistent size */
+    height: var(--control-height);
+    padding: 0 0.75rem;
+}
+.page-link i { line-height: 1; } /* Fix icon alignment */
+
+/* Alerts */
+.message-container {
+    position: relative; /* Context for absolute positioning if needed later */
+    z-index: 1056; /* Ensure messages are above most content */
+}
+.alert {
+    border-radius: 0.375rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+}
+.alert i {
+    margin-right: 0.75rem;
+    font-size: 1.2em;
+    flex-shrink: 0; /* Prevent icon from shrinking */
+}
+.alert-dismissible {
+    padding-right: 3rem; /* Space for close button */
+}
+.alert-dismissible .btn-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
+    padding: 1.25rem 1.25rem;
+    color: inherit;
 }
 
 /* Footer */
 footer {
     background-color: var(--footer-bg);
     color: var(--footer-text);
-    padding: 1.5rem 0;
+    padding: 1rem 0;
     margin-top: auto;
     text-align: center;
-    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
+    font-size: 0.9rem;
+    border-top: 1px solid var(--border-color);
 }
 
-/* Alerts */
-.alert {
-    border-radius: 0.375rem;
-    padding: 1rem 1.25rem;
-    margin-bottom: 1.5rem;
-    border: 1px solid transparent;
-}
-
-.alert-dismissible .btn-close {
-    color: inherit;
-}
-
-/* Theme toggler */
-.theme-toggle {
-    cursor: pointer;
-    padding: 0.25rem 0.5rem;
+/* Theme Toggler Placeholder */
+#theme-toggler-placeholder .theme-toggle {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.75);
+    padding: 0.5rem;
     border-radius: 0.25rem;
-    display: inline-flex;
-    align-items: center;
-    margin-left: 0.5rem;
+    cursor: pointer;
+    transition: color 0.2s ease, background-color 0.2s ease;
 }
-
-.theme-toggle i {
-    font-size: 1.2rem;
+#theme-toggler-placeholder .theme-toggle:hover {
     color: var(--navbar-text);
+    background-color: rgba(255, 255, 255, 0.1);
+}
+#theme-toggler-placeholder .theme-toggle i {
+    font-size: 1.1rem;
+    vertical-align: middle;
 }
 
-/* Additional responsive tweaks */
-@media (max-width: 768px) {
-    .login-form {
-        margin: 2rem auto;
-        padding: 1.5rem;
+
+/* ============================================ */
+/* == Responsive Table Styles (Mobile View) == */
+/* ============================================ */
+@media (max-width: 991.98px) {
+    .table-responsive {
+        border: none;
     }
 
+    .file-browser-table thead {
+        display: none; /* Hide desktop header */
+    }
+
+    .file-browser-table,
+    .file-browser-table tbody,
+    .file-browser-table tr,
+    .file-browser-table td {
+        display: block; /* Make table elements stack */
+        width: 100%;
+    }
+
+    .file-browser-table tr {
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        padding: 1rem; /* Base padding for the row container */
+        position: relative; /* Context for checkbox */
+        padding-top: 3.5rem; /* Extra top padding to avoid overlap with checkbox */
+        background-color: var(--card-bg); /* Ensure background for spacing */
+    }
+
+    .file-browser-table td {
+        padding: 0.6rem 0; /* Vertical padding, horizontal handled by flex */
+        display: flex;
+        /* >>> CORRECTED: Use space-between for the TD container <<< */
+        justify-content: space-between; /* Label left, Value right */
+        align-items: center;
+        border: none;
+        border-bottom: 1px dashed var(--border-color); /* Dashed separator */
+        min-height: 40px; /* Ensure cells have some height */
+        text-align: right; /* Default align value to the right */
+    }
+    .file-browser-table tr:last-of-type td:last-of-type { /* Prevent double border */
+       /* border-bottom: none; */ /* Keep border for consistency inside card */
+    }
+     .file-browser-table td:last-child {
+         border-bottom: none; /* Remove border from the very last cell in a row */
+     }
+
+
+    /* Mobile Label Styling */
+    .file-browser-table td::before {
+        content: attr(data-label); /* Get label text */
+        font-weight: 600;
+        text-align: left;
+        padding-right: 1rem; /* Space between label and value */
+        white-space: nowrap;
+        flex-basis: var(--mobile-label-width); /* Give labels a consistent width */
+        flex-shrink: 0; /* Don't allow labels to shrink */
+        color: var(--text-secondary); /* Mute label color slightly */
+    }
+
+    /* --- Cell Specific Adjustments --- */
+
+    /* Checkbox Cell */
+    .file-browser-table td:first-child { /* The checkbox cell */
+        position: absolute;
+        top: 1rem; /* Position near top */
+        left: 1rem; /* Position near left */
+        border: none;
+        padding: 0;
+        width: auto;
+        min-height: 0;
+        background: transparent;
+        justify-content: flex-start; /* Align checkbox left */
+    }
+    .file-browser-table td:first-child::before {
+        display: none; /* No label needed for checkbox */
+    }
+    .file-browser-table td:first-child .form-check-input {
+        margin: 0; /* Remove margins */
+        transform: scale(1.1); /* Make checkbox slightly larger */
+    }
+
+    /* Name Cell */
+    .file-browser-table td.file-name-cell {
+        text-align: left; /* Align file name left */
+        /* justify-content: space-between; <<< Already set on TD */
+    }
+    .file-browser-table td.file-name-cell .file-name-link {
+        /* Value part takes remaining space */
+        flex-grow: 1;
+        min-width: 0; /* Prevent overflow */
+        justify-content: flex-start; /* Align icon/text left */
+        text-align: left; /* Ensure link text aligns left */
+    }
+     /* Allow file/folder names to wrap if needed, override desktop nowrap */
+    .file-name-text, .folder-name-text {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+
+
+    /* Size & Date Cells */
+    .file-browser-table td [data-label="Размер"] span, /* Target the span if present */
+    .file-browser-table td [data-label="Дата изменения"] span {
+         white-space: nowrap; /* Keep size/date from wrapping */
+         /* Value content will align right by default */
+    }
+    /* Make sure the value itself doesn't shrink */
+    .file-browser-table td [data-label="Размер"] > *:last-child,
+    .file-browser-table td [data-label="Дата изменения"] > *:last-child {
+        flex-shrink: 0;
+    }
+
+
+    /* Actions Cell */
+    .file-browser-table td.actions-cell {
+        /* TD uses space-between (set above) to separate label and button container */
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+     .file-browser-table td.actions-cell::before {
+         /* Label aligns left via flex-basis and text-align */
+     }
+     .file-browser-table td.actions-cell .action-buttons {
+        /* This is the "value" part of the TD's flex */
+        /* Align buttons to the end *within* this container (if multiple buttons) */
+        justify-content: flex-end;
+        flex-shrink: 0; /* Prevent button container shrinking */
+     }
+
+    /* --- End Cell Adjustments --- */
+}
+
+/* Further adjustments for very small screens */
+@media (max-width: 575.98px) {
     .card-header {
         padding: 0.75rem 1rem;
     }
-
     .card-body {
-        padding: 1rem;
+        padding: 1rem 0.75rem; /* Reduce horizontal padding */
     }
 
-    .table td, .table th {
-        padding: 0.5rem;
+    /* Mobile table adjustments for extra small screens */
+    .file-browser-table tr {
+        padding: 0.75rem; /* Reduce row padding */
+        padding-top: 3rem; /* Keep space for checkbox */
+        margin-bottom: 0.75rem;
     }
+    .file-browser-table td {
+        min-height: 36px; /* Slightly smaller min-height */
+    }
+     .file-browser-table td::before {
+        flex-basis: 80px; /* Slightly narrower label */
+        padding-right: 0.5rem;
+     }
+     .file-browser-table td:first-child { /* Checkbox position */
+        top: 0.75rem;
+        left: 0.75rem;
+     }
+
+    /* Action buttons smaller */
+    .action-btn {
+        width: calc(var(--control-height) - 4px);
+        height: calc(var(--control-height) - 4px);
+        font-size: 0.85rem;
+    }
+    .action-buttons {
+        gap: 0.2rem; /* Tighter gap */
+    }
+
+    .pagination { flex-wrap: wrap; } /* Ensure pagination wraps */
+    .page-link { height: calc(var(--control-height) - 2px); min-width: calc(var(--control-height) - 2px); padding: 0 0.5rem; font-size: 0.9rem; }
 }
 
-/* Pagination */
-.pagination {
+
+/* ======================================== */
+/* == User List Table Mobile Styles == */
+/* ======================================== */
+.user-list-table thead {
+    display: none;
+}
+
+.user-list-table,
+.user-list-table tbody,
+.user-list-table tr,
+.user-list-table td {
+    display: block;
+    width: 100%;
+}
+
+.user-list-table tr {
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    position: relative;
+     background-color: var(--card-bg);
+}
+ /* Remove extra margin from the last row */
+.user-list-table tr:last-of-type {
+    margin-bottom: 0;
+}
+
+.user-list-table td {
+    padding: 0.6rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: none;
+    border-bottom: 1px dashed var(--border-color);
+    min-height: 40px;
+    text-align: right; /* Default value alignment */
+}
+ .user-list-table td:last-child {
+     border-bottom: none;
+ }
+
+/* User List Mobile Label Styling */
+.user-list-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+    padding-right: 1rem;
+    white-space: nowrap;
+    flex-basis: var(--mobile-label-width, 110px); /* Slightly wider default for user list */
+    flex-shrink: 0;
+    color: var(--text-secondary);
+}
+
+/* --- User List Cell Specific Adjustments --- */
+
+/* Text-based cells (Username, Full Name, Email) */
+.user-list-table td[data-label="Имя пользователя"],
+.user-list-table td[data-label="Полное имя"],
+.user-list-table td[data-label="Email"] {
+    text-align: right; /* Ensure value aligns right */
+     /* Allow wrapping for potentially long values */
+    word-break: break-word;
+    hyphens: auto;
+}
+ .user-list-table td[data-label="Email"] > *:last-child {
+     /* Prevent email address shrinking */
+     flex-shrink: 0;
+ }
+
+
+/* Status Cell */
+.user-list-table td[data-label="Статус"] {
+     /* justify-content: space-between; <<< Already set on TD */
+}
+.user-list-table td[data-label="Статус"] .badge {
+    margin-bottom: 0.2rem; /* Add space between badges if they wrap */
+    font-size: 0.8em; /* Slightly smaller badges on mobile */
+}
+/* Container for badges aligns right */
+ .user-list-table td[data-label="Статус"] > div:last-child, /* If wrapped in div */
+ .user-list-table td[data-label="Статус"] > span:last-child /* Or directly spans */
+ {
+    text-align: right;
+    flex-shrink: 0; /* Prevent badge shrinking */
+ }
+
+
+/* Last Login Cell */
+.user-list-table td[data-label="Последний вход"] {
+   /* Default label/value alignment is fine */
+}
+ .user-list-table td[data-label="Последний вход"] > span:last-child {
+     white-space: nowrap;
+     flex-shrink: 0;
+ }
+
+/* Actions Cell */
+.user-list-table td.actions-cell {
+    justify-content: space-between; /* Label left, buttons right */
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+ .user-list-table td.actions-cell .action-buttons {
+    justify-content: flex-end; /* Align buttons to the end */
+    flex-shrink: 0; /* Prevent button container shrinking */
+ }
+
+/* No Users Found Row */
+.user-list-table tr td[colspan="6"] {
+    border: none;
+    text-align: center;
+    padding: 1.5rem;
+    min-height: auto;
     justify-content: center;
-    margin-top: 1.5rem;
+}
+ .user-list-table tr td[colspan="6"]::before {
+     display: none; /* No label needed */
+ }
+
+
+ /* ========================================= */
+/* == Action Log Table Mobile Styles == */
+/* ========================================= */
+.action-logs-table thead {
+    display: none;
 }
 
-.page-link {
-    color: var(--primary-color);
-    background-color: var(--card-bg);
-    border-color: var(--border-color);
+.action-logs-table,
+.action-logs-table tbody,
+.action-logs-table tr,
+.action-logs-table td {
+    display: block;
+    width: 100%;
 }
 
-.page-link:hover {
-    background-color: var(--bg-tertiary);
-    color: var(--primary-color);
-    border-color: var(--border-color);
+.action-logs-table tr {
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    position: relative;
+     background-color: var(--card-bg);
+}
+/* Remove extra margin from the last row */
+.action-logs-table tr:last-of-type {
+    margin-bottom: 0;
 }
 
-.page-item.active .page-link {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
+.action-logs-table td {
+    padding: 0.6rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: none;
+    border-bottom: 1px dashed var(--border-color);
+    min-height: 40px;
+    text-align: right; /* Default value alignment */
 }
+ .action-logs-table td:last-child {
+     border-bottom: none;
+ }
+
+/* Action Log Mobile Label Styling */
+.action-logs-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+    padding-right: 1rem;
+    white-space: nowrap;
+    flex-basis: var(--mobile-label-width, 100px); /* Default width */
+    flex-shrink: 0;
+    color: var(--text-secondary);
+}
+
+/* --- Action Log Cell Specific Adjustments --- */
+
+/* Cells with badges (Action, Status) */
+.action-logs-table td[data-label="Действие"],
+.action-logs-table td[data-label="Статус"] {
+    /* TD uses space-between */
+}
+.action-logs-table td[data-label="Действие"] > span.badge,
+.action-logs-table td[data-label="Статус"] > span.badge {
+    /* Badge itself aligns right as the value */
+    flex-shrink: 0;
+    font-size: 0.85em;
+}
+ .action-logs-table td[data-label="Статус"] > span.badge i {
+     font-size: 0.9em; /* Adjust icon size inside badge */
+     vertical-align: text-bottom;
+ }
+
+/* Object Path Cell - allow break */
+.action-logs-table td[data-label="Объект"] {
+    word-break: break-all; /* Allow long paths to break */
+    hyphens: auto;
+    text-align: left; /* Usually better for paths */
+}
+ .action-logs-table td[data-label="Объект"]::before {
+     align-self: flex-start; /* Align label top if path wraps */
+ }
+
+
+/* IP Address & Time Cell */
+ .action-logs-table td[data-label="IP адрес"] > *:last-child,
+ .action-logs-table td[data-label="Время"] > span:last-child {
+     white-space: nowrap;
+     flex-shrink: 0;
+ }
+
+
+/* Details Cell (Actions Cell) */
+.action-logs-table td.actions-cell {
+     justify-content: space-between;
+     padding-top: 0.5rem;
+     padding-bottom: 0.5rem;
+}
+ .action-logs-table td.actions-cell .action-buttons {
+     justify-content: flex-end;
+     flex-shrink: 0;
+ }
+ /* Ensure placeholder aligns correctly */
+  .action-logs-table td.actions-cell .action-buttons:empty::after,
+  .action-logs-table td.actions-cell .action-buttons:only-child:not(.btn)::after {
+      content: "-";
+      display: inline-block;
+      color: var(--text-muted);
+  }
+
+
+/* No Logs Found Row */
+.action-logs-table tr td[colspan="7"] {
+    border: none;
+    text-align: center;
+    padding: 1.5rem;
+    min-height: auto;
+    justify-content: center;
+}
+ .action-logs-table tr td[colspan="7"]::before {
+     display: none; /* No label needed */
+ }
+
+/* Modal adjustments if needed */
+.modal-body pre {
+    max-height: 60vh; /* Limit height of pre block */
+    overflow-y: auto;
+    background-color: var(--bg-secondary) !important; /* Ensure background respects theme */
+    border-color: var(--border-color) !important;
+    color: var(--text-primary);
+    white-space: pre-wrap;       /* Allow wrapping */
+    word-break: break-all;     /* Break long strings */
+}
+ .modal-body pre code {
+     color: inherit; /* Inherit color */
+ }
+
+ /* ============================================= */
+/* == User Permissions Table Mobile Styles == */
+/* ============================================= */
+.permissions-table thead {
+    display: none;
+}
+
+.permissions-table,
+.permissions-table tbody,
+.permissions-table tr,
+.permissions-table td {
+    display: block;
+    width: 100%;
+}
+
+.permissions-table tr {
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    position: relative;
+     background-color: var(--card-bg);
+}
+ /* Remove extra margin from the last row */
+.permissions-table tr:last-of-type {
+    margin-bottom: 0;
+}
+
+.permissions-table td {
+    padding: 0.6rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: none;
+    border-bottom: 1px dashed var(--border-color);
+    min-height: 40px;
+    text-align: right; /* Default value alignment */
+}
+ .permissions-table td:last-child {
+     border-bottom: none;
+ }
+
+/* Permissions Mobile Label Styling */
+.permissions-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+    padding-right: 1rem;
+    white-space: nowrap;
+    flex-basis: var(--mobile-label-width, 90px); /* Adjust width if needed */
+    flex-shrink: 0;
+    color: var(--text-secondary);
+}
+
+/* --- Permissions Cell Specific Adjustments --- */
+
+/* Path Cell */
+.permissions-table td[data-label="Путь"] {
+     text-align: left; /* Align path left */
+     word-break: break-all;
+}
+.permissions-table td[data-label="Путь"] code {
+    background-color: transparent; /* Remove code background */
+    padding: 0;
+    font-size: 0.95em;
+    color: inherit;
+}
+.permissions-table td[data-label="Путь"]::before {
+    align-self: flex-start; /* Align label top if path wraps */
+}
+
+
+/* Permission Icon Cells (Read, Write, Delete) */
+.permissions-table td[data-label="Чтение"],
+.permissions-table td[data-label="Запись"],
+.permissions-table td[data-label="Удаление"] {
+    justify-content: center; /* Center content (icon) relative to label */
+}
+ .permissions-table td[data-label="Чтение"]::before,
+ .permissions-table td[data-label="Запись"]::before,
+ .permissions-table td[data-label="Удаление"]::before {
+     flex-grow: 1; /* Allow label to push icon to center */
+ }
+ .permissions-table td[data-label="Чтение"] i,
+ .permissions-table td[data-label="Запись"] i,
+ .permissions-table td[data-label="Удаление"] i {
+     font-size: 1.2em; /* Make icons slightly larger */
+     flex-shrink: 0;
+ }
+
+/* Actions Cell */
+.permissions-table td.actions-cell {
+     justify-content: space-between;
+     padding-top: 0.5rem;
+     padding-bottom: 0.5rem;
+}
+ .permissions-table td.actions-cell .action-buttons {
+     justify-content: flex-end;
+     flex-shrink: 0;
+ }
+
+/* No Permissions Row */
+.permissions-table tr td[colspan="5"] {
+    border: none;
+    text-align: center;
+    padding: 1.5rem;
+    min-height: auto;
+    justify-content: center;
+}
+ .permissions-table tr td[colspan="5"]::before {
+     display: none; /* No label needed */
+ }
+
+/* --- End Cell Adjustments --- */
+
+/* Ensure form stacks correctly (already handled by col-lg-*) */
+/* Adjust form elements spacing if needed */
+ .col-lg-4 .card {
+     position: static !important; /* Remove sticky positioning on mobile */
+     top: auto !important;
+ }

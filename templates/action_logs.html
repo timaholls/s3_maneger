@@ -4,71 +4,76 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-    <h1 class="mb-4">Журнал действий</h1>
+    <h1 class="mb-4 h2">Журнал действий</h1>
 
     <div class="card">
-        <div class="card-body">
+        <div class="card-body p-0"> {# Remove padding for full-width table #}
             <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
+                <table class="table table-hover align-middle mb-0 action-logs-table"> {# Added class #}
+                    <thead class="table-light">
                         <tr>
-                            <th>Время</th>
-                            <th>Пользователь</th>
-                            <th>Действие</th>
-                            <th>Объект</th>
-                            <th>Статус</th>
-                            <th>IP адрес</th>
-                            <th>Детали</th>
+                            <th scope="col">Время</th>
+                            <th scope="col">Пользователь</th>
+                            <th scope="col">Действие</th>
+                            <th scope="col">Объект</th>
+                            <th scope="col" class="text-center">Статус</th>
+                            <th scope="col">IP адрес</th>
+                            <th scope="col" class="text-center">Детали</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for log in logs %}
+                        {% for log in page_obj %} {# Changed from logs to page_obj #}
                         <tr>
-                            <td>{{ log.timestamp|date:"d.m.Y H:i:s" }}</td>
-                            <td>{{ log.user.username|default:"Аноним" }}</td>
-                            <td>
-                                {% if log.action_type == 'read' %}
-                                <span class="badge bg-info">Чтение</span>
-                                {% elif log.action_type == 'upload' %}
-                                <span class="badge bg-primary">Загрузка</span>
-                                {% elif log.action_type == 'download' %}
-                                <span class="badge bg-success">Скачивание</span>
-                                {% elif log.action_type == 'delete' %}
-                                <span class="badge bg-danger">Удаление</span>
-                                {% elif log.action_type == 'create_folder' %}
-                                <span class="badge bg-warning">Создание папки</span>
-                                {% elif log.action_type == 'delete_folder' %}
-                                <span class="badge bg-danger">Удаление папки</span>
-                                {% else %}
-                                <span class="badge bg-secondary">{{ log.action_type }}</span>
-                                {% endif %}
+                            <td data-label="Время"><span class="text-nowrap">{{ log.timestamp|date:"d.m.Y H:i:s" }}</span></td>
+                            <td data-label="Пользователь">{{ log.user.username|default:"Система/Аноним" }}</td>
+                            <td data-label="Действие">
+                                {% with action=log.action_type %} {# Using with for cleaner badges #}
+                                    {% if action == 'read' %}<span class="badge bg-info text-dark">Чтение</span>
+                                    {% elif action == 'upload' %}<span class="badge bg-primary">Загрузка</span>
+                                    {% elif action == 'download' %}<span class="badge bg-success">Скачивание</span>
+                                    {% elif action == 'delete' %}<span class="badge bg-danger">Удаление файла</span>
+                                    {% elif action == 'create_folder' %}<span class="badge bg-warning text-dark">Создание папки</span>
+                                    {% elif action == 'delete_folder' %}<span class="badge bg-danger">Удаление папки</span>
+                                    {% elif action == 'login' %}<span class="badge bg-secondary">Вход</span>
+                                    {% elif action == 'logout' %}<span class="badge bg-secondary">Выход</span>
+                                    {% elif action == 'password_change' %}<span class="badge bg-warning text-dark">Смена пароля</span>
+                                    {% elif action == 'user_created' %}<span class="badge bg-success">User создан</span>
+                                    {% elif action == 'user_updated' %}<span class="badge bg-info text-dark">User изменен</span>
+                                    {% elif action == 'permission_updated' %}<span class="badge bg-warning text-dark">Права изменены</span>
+                                    {% else %}<span class="badge bg-secondary">{{ action|capfirst }}</span>
+                                    {% endif %}
+                                {% endwith %}
                             </td>
-                            <td>{{ log.object_path }}</td>
-                            <td>
+                            <td data-label="Объект" class="text-break">{{ log.object_path|default:"N/A" }}</td>
+                            <td data-label="Статус" class="text-center">
                                 {% if log.success %}
-                                <span class="badge bg-success">Успешно</span>
+                                <span class="badge bg-success" title="Успешно"><i class="fas fa-check-circle"></i></span>
                                 {% else %}
-                                <span class="badge bg-danger">Ошибка</span>
+                                <span class="badge bg-danger" title="Ошибка"><i class="fas fa-exclamation-circle"></i></span>
                                 {% endif %}
                             </td>
-                            <td>{{ log.ip_address|default:"-" }}</td>
-                            <td>
+                            <td data-label="IP адрес">{{ log.ip_address|default:"-" }}</td>
+                            <td data-label="Детали" class="actions-cell"> {# Added class #}
                                 {% if log.details %}
-                                <button type="button" class="btn btn-sm btn-outline-secondary"
-                                        data-bs-toggle="modal" data-bs-target="#detailsModal{{ log.id }}">
-                                    <i class="fas fa-info-circle"></i>
-                                </button>
+                                <div class="action-buttons"> {# Wrap button for consistent alignment #}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary action-btn"
+                                            data-bs-toggle="modal" data-bs-target="#detailsModal{{ log.id }}"
+                                            title="Показать детали">
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                </div>
 
                                 <!-- Modal с деталями -->
-                                <div class="modal fade" id="detailsModal{{ log.id }}" tabindex="-1" aria-hidden="true">
-                                    <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal fade" id="detailsModal{{ log.id }}" tabindex="-1" aria-labelledby="detailsModalLabel{{ log.id }}" aria-hidden="true">
+                                    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"> {# Larger modal, scrollable #}
                                         <div class="modal-content">
                                             <div class="modal-header">
-                                                <h5 class="modal-title">Детали действия</h5>
+                                                <h5 class="modal-title" id="detailsModalLabel{{ log.id }}">Детали действия #{{ log.id }}</h5>
                                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                             </div>
                                             <div class="modal-body">
-                                                <pre>{{ log.details }}</pre>
+                                                {# Attempt to pretty-print if details look like JSON #}
+                                                <pre class="bg-light p-3 rounded border"><code>{{ log.details }}</code></pre>
                                             </div>
                                             <div class="modal-footer">
                                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
@@ -77,21 +82,85 @@
                                     </div>
                                 </div>
                                 {% else %}
-                                -
+                                <div class="action-buttons">-</div> {# Placeholder for alignment #}
                                 {% endif %}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-3">
-                                <i class="fas fa-info-circle me-2"></i> Журнал действий пуст
+                            <td colspan="7" class="text-center py-4"> {# Correct colspan #}
+                                <i class="fas fa-info-circle me-2"></i> Журнал действий пуст.
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
+            </div> {# End table-responsive #}
+
+             <!-- PAGINATION -->
+            {% if page_obj and page_obj.paginator.num_pages > 1 %}
+            <div class="pagination-container p-3 border-top"> {# Added padding and border #}
+                <nav aria-label="Навигация по страницам журнала">
+                    <ul class="pagination justify-content-center flex-wrap mb-0"> {# Removed margin #}
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1" title="Первая страница" aria-label="Первая страница">
+                                    <i class="fas fa-angle-double-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Предыдущая страница">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link"><i class="fas fa-angle-double-left"></i></span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link"><i class="fas fa-angle-left"></i></span>
+                            </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active" aria-current="page">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% elif num == page_obj.number|add:'-3' or num == page_obj.number|add:'3' %}
+                                 <li class="page-item disabled d-none d-sm-block"><span class="page-link">...</span></li> {# Hide ellipsis on xs #}
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Следующая страница">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" title="Последняя страница" aria-label="Последняя страница">
+                                    <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link"><i class="fas fa-angle-right"></i></span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link"><i class="fas fa-angle-double-right"></i></span>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
             </div>
-        </div>
-    </div>
-</div>
+            {% endif %}
+
+        </div> {# End card-body #}
+    </div> {# End card #}
+</div> {# End container-fluid #}
 {% endblock %}

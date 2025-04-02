@@ -7,11 +7,13 @@
     <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
 
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- Google Fonts -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/static/css/style.css">
 
@@ -21,54 +23,57 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 's3app:browser' %}">
-                <i class="fas fa-cloud mr-2"></i> S3 Менеджер
+            <a class="navbar-brand d-flex align-items-center" href="{% url 's3app:browser' %}">
+                <i class="fas fa-cloud me-2"></i> S3 Менеджер
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     {% if user.is_authenticated %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 's3app:browser' %}">
-                            <i class="fas fa-folder"></i> Файлы
+                        <a class="nav-link {% if request.resolver_match.url_name == 'browser' or request.resolver_match.url_name == 'browser_path' %}active{% endif %}" href="{% url 's3app:browser' %}">
+                            <i class="fas fa-folder me-1"></i> Файлы
                         </a>
                     </li>
                     {% if user.is_staff %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 's3app:user_list' %}">
-                            <i class="fas fa-users"></i> Пользователи
+                        <a class="nav-link {% if request.resolver_match.url_name == 'user_list' %}active{% endif %}" href="{% url 's3app:user_list' %}">
+                            <i class="fas fa-users me-1"></i> Пользователи
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 's3app:action_logs' %}">
-                            <i class="fas fa-list"></i> Журнал действий
+                        <a class="nav-link {% if request.resolver_match.url_name == 'action_logs' %}active{% endif %}" href="{% url 's3app:action_logs' %}">
+                            <i class="fas fa-list me-1"></i> Журнал действий
                         </a>
                     </li>
                     {% endif %}
                     {% endif %}
-                    <!-- Переключатель темы добавляется через JavaScript -->
+                     <!-- Theme toggler placeholder (JS adds the actual button) -->
+                     <li class="nav-item d-flex align-items-center ms-lg-2">
+                        <span id="theme-toggler-placeholder"></span>
+                    </li>
                 </ul>
                 <ul class="navbar-nav">
                     {% if user.is_authenticated %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-user"></i> {{ user.username }}
+                        <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user me-2"></i> {{ user.username }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
                             <li><a class="dropdown-item" href="{% url 's3app:password_change' %}">
-                                <i class="fas fa-key me-2"></i> Сменить пароль
+                                <i class="fas fa-key me-2 fa-fw"></i> Сменить пароль
                             </a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{% url 's3app:logout' %}">
-                                <i class="fas fa-sign-out-alt me-2"></i> Выйти
+                                <i class="fas fa-sign-out-alt me-2 fa-fw"></i> Выйти
                             </a></li>
                         </ul>
                     </li>
                     {% else %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 's3app:login' %}">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'login' %}active{% endif %}" href="{% url 's3app:login' %}">
                             <i class="fas fa-sign-in-alt me-1"></i> Войти
                         </a>
                     </li>
@@ -79,8 +84,8 @@
     </nav>
 
     <!-- Messages -->
+    <div class="container mt-3 message-container">
     {% if messages %}
-    <div class="container mt-3">
         {% for message in messages %}
         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
             {% if message.tags == 'success' %}
@@ -91,30 +96,33 @@
                 <i class="fas fa-exclamation-triangle me-2"></i>
             {% elif message.tags == 'info' %}
                 <i class="fas fa-info-circle me-2"></i>
+            {% else %}
+                <i class="fas fa-bell me-2"></i> {# Default icon #}
             {% endif %}
             {{ message }}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         {% endfor %}
-    </div>
     {% endif %}
+    </div>
 
     <!-- Content -->
-    <div class="content">
+    <main class="content py-4">
         {% block content %}{% endblock %}
-    </div>
+    </main>
 
     <!-- Footer -->
     <footer class="py-3 mt-auto">
         <div class="container text-center">
-            <p class="mb-0">&copy; {% now "Y" %} S3 Менеджер - Система управления файлами для TimeWeb S3</p>
+            <p class="mb-0">© {% now "Y" %} S3 Менеджер - Система управления файлами</p>
         </div>
     </footer>
 
     <!-- Bootstrap JS with Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
     <!-- Theme Script -->
-    <script src="/static/js/theme.js"></script>
+    <!-- File Manager Script (assumed for multi-select actions) -->
+    <script src="/static/js/file_manager.js"></script>
 
     {% block extra_js %}{% endblock %}
 </body>

@@ -24,7 +24,8 @@ from django.http import HttpResponse, JsonResponse  # Добавляем JsonRes
 from django.shortcuts import render, redirect  # Убедитесь, что render импортирован
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect  # Для CSRF
 from django.views.decorators.http import require_http_methods  # Для ограничения методов
-
+from django.shortcuts import render
+from django.core.paginator import Paginator
 
 def login_view(request):
     """Авторизация пользователя с CAPTCHA"""
@@ -190,7 +191,7 @@ def browser_view(request, path=''):
 
             from django.core.paginator import Paginator  # Keep Paginator import
 
-            paginator = Paginator(all_items, 15)  # Adjust items per page if needed
+            paginator = Paginator(all_items, 10)  # Changed to 10 items per page
             page_number = request.GET.get('page')
             context['page_obj'] = paginator.get_page(page_number)
 
@@ -490,10 +491,135 @@ def delete_permission(request, perm_id):
 
 @staff_member_required
 def action_logs(request):
-    """Просмотр журнала действий пользователей (только для администраторов)"""
-    logs = S3ActionLog.objects.all().order_by('-timestamp')[:1000]  # Ограничиваем вывод 1000 последними записями
+    # Get all logs, ordered by timestamp (newest first is common)
+    log_list = S3ActionLog.objects.all().order_by('-timestamp')
 
-    return render(request, 'action_logs.html', {'logs': logs})
+    # Set up Paginator
+    paginator = Paginator(log_list, 20) # 20 items per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number) # Get the Page object for the current page
+
+    context = {
+        'page_obj': page_obj # Pass the Page object to the template
+    }
+    return render(request, 'action_logs.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def download_multiple(request):
+    """Обработчик для скачивания нескольких файлов в виде ZIP-архива"""
+    import zipfile
+    import io
+    import tempfile
+    import time
+
+    # Получаем список файлов для скачивания
+    file_paths = request.POST.getlist('files[]')
+
+    if not file_paths:
+        return JsonResponse({'error': 'No files selected'}, status=400)
+
+    # Создаем временный архив
+    s3_service = S3Service()
+
+    try:
+        # Используем временный файл вместо памяти для больших архивов
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+
+        with zipfile.ZipFile(temp_file_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for file_path in file_paths:
+                try:
+                    # Получаем файл из S3
+                    file_content = s3_service.get_object_content(request.user, file_path)
+
+                    # Добавляем файл в архив с только именем файла (без пути)
+                    zip_file.writestr(os.path.basename(file_path), file_content)
+
+                    # Логируем действие
+                    S3ActionLog.objects.create(
+                        user=request.user,
+                        action='download',
+                        path=file_path,
+                        details=f'Downloaded in bulk archive'
+                    )
+                except Exception as e:
+                    # Пропускаем файлы, которые не удалось скачать
+                    continue
+
+        # Открываем архив для отправки
+        with open(temp_file_path, 'rb') as f:
+            response = HttpResponse(f.read(), content_type='application/zip')
+            response['Content-Disposition'] = f'attachment; filename="files_{int(time.time())}.zip"'
+
+        # Удаляем временный файл
+        os.unlink(temp_file_path)
+
+        return response
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def delete_multiple(request):
+    """Обработчик для удаления нескольких файлов и/или папок"""
+    # Получаем списки файлов и папок для удаления
+    file_paths = request.POST.getlist('files[]')
+    folder_paths = request.POST.getlist('folders[]')
+
+    if not file_paths and not folder_paths:
+        return JsonResponse({'error': 'No items selected'}, status=400)
+
+    s3_service = S3Service()
+
+    # Счетчики успешных операций
+    deleted_files = 0
+    deleted_folders = 0
+    errors = []
+
+    # Удаляем файлы
+    for file_path in file_paths:
+        try:
+            s3_service.delete_object(request.user, file_path)
+            deleted_files += 1
+
+            # Логируем действие
+            S3ActionLog.objects.create(
+                user=request.user,
+                action='delete',
+                path=file_path,
+                details=f'Deleted in bulk operation'
+            )
+        except Exception as e:
+            errors.append(f"Не удалось удалить файл {file_path}: {str(e)}")
+
+    # Удаляем папки
+    for folder_path in folder_paths:
+        try:
+            s3_service.delete_folder(request.user, folder_path)
+            deleted_folders += 1
+
+            # Логируем действие
+            S3ActionLog.objects.create(
+                user=request.user,
+                action='delete',
+                path=folder_path,
+                details=f'Deleted folder in bulk operation'
+            )
+        except Exception as e:
+            errors.append(f"Не удалось удалить папку {folder_path}: {str(e)}")
+
+    response_data = {
+        'success': True,
+        'deleted_files': deleted_files,
+        'deleted_folders': deleted_folders,
+        'errors': errors
+    }
+
+    return JsonResponse(response_data)
 
 
 def _get_breadcrumbs(path):

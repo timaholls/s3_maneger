@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load humanize %} {# Load humanize if not already loaded, for filesizeformat #}
+{% load humanize %}
 
 {% block title %}
     {% if is_search_view %}
@@ -10,220 +10,182 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container-fluid py-4">
-        <div class="row">
-            <!-- Breadcrumbs (remains the same) -->
-            <div class="col-12 mb-3">
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb">
-                        {% for crumb in breadcrumbs %}
-                            <li class="breadcrumb-item {% if forloop.last and not is_search_view %}active{% endif %}" {% if forloop.last and not is_search_view %}aria-current="page"{% endif %}>
-                                {% if not forloop.last or is_search_view %}
-                                    {% if crumb.path %}
-                                        <a href="{% url 's3app:browser_path' path=crumb.path %}">{{ crumb.name }}</a>
-                                    {% else %}
-                                        <a href="{% url 's3app:browser' %}"><i class="fas fa-home"></i> {{ crumb.name }}</a>
-                                    {% endif %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Breadcrumbs -->
+        <div class="col-12 mb-3">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    {% for crumb in breadcrumbs %}
+                        <li class="breadcrumb-item {% if forloop.last and not is_search_view %}active{% endif %}" {% if forloop.last and not is_search_view %}aria-current="page"{% endif %}>
+                            {% if not forloop.last or is_search_view %}
+                                {% if crumb.path %}
+                                    <a href="{% url 's3app:browser_path' path=crumb.path %}">{{ crumb.name }}</a>
                                 {% else %}
-                                     <span>{% if not crumb.path %}<i class="fas fa-home"></i> {% endif %}{{ crumb.name }}</span>
+                                    <a href="{% url 's3app:browser' %}"><i class="fas fa-home me-1"></i>{{ crumb.name }}</a>
                                 {% endif %}
-                            </li>
-                        {% endfor %}
-                        {% if is_search_view %}
-                            <li class="breadcrumb-item active" aria-current="page">Результаты поиска "{{ search_query }}"</li>
-                        {% endif %}
-                    </ol>
-                </nav>
-            </div>
+                            {% else %}
+                                 <span>{% if not crumb.path %}<i class="fas fa-home me-1"></i>{% endif %}{{ crumb.name }}</span>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                    {% if is_search_view %}
+                        <li class="breadcrumb-item active" aria-current="page">Результаты поиска "{{ search_query }}"</li>
+                    {% endif %}
+                </ol>
+            </nav>
+        </div>
 
-            <!-- Actions Panel (remains the same, shown only when browsing) -->
-            {% if not is_search_view %}
-            <div class="col-12 mb-4">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row">
-                             <!-- Create Folder Form -->
-                            <div class="col-md-6">
-                                <h5 class="card-title">Создать папку</h5>
-                                <form method="post" action="{% url 's3app:create_folder_path' path=current_path|default:'root' %}">
-                                    {% csrf_token %}
-                                    <div class="input-group">
-                                        {{ folder_form.folder_name }}
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="fas fa-folder-plus"></i> Создать
-                                        </button>
+        <!-- Actions Panel (Only when browsing, not searching) -->
+        {% if not is_search_view %}
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                         <!-- Create Folder Form -->
+                        <div class="col-lg-6">
+                            <h5 class="card-title mb-2">Создать папку</h5>
+                            <form method="post" action="{% url 's3app:create_folder_path' path=current_path|default:'root' %}" class="action-form">
+                                {% csrf_token %}
+                                <div class="input-group">
+                                    {{ folder_form.folder_name }} {# Assumes widget has 'form-control' class #}
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-folder-plus me-1"></i> Создать
+                                    </button>
+                                </div>
+                                {% if folder_form.folder_name.errors %}
+                                    <div class="invalid-feedback d-block mt-1">
+                                        {% for error in folder_form.folder_name.errors %}{{ error }}{% endfor %}
                                     </div>
-                                    {% if folder_form.folder_name.errors %}
-                                        <div class="invalid-feedback d-block">
-                                            {% for error in folder_form.folder_name.errors %}{{ error }}{% endfor %}
-                                        </div>
-                                    {% endif %}
-                                </form>
-                            </div>
-                            <!-- Upload File Form -->
-                            <div class="col-md-6">
-                                <h5 class="card-title">Загрузить файл</h5>
-                                <form method="post" action="{% url 's3app:upload_file_path' path=current_path|default:'root' %}" enctype="multipart/form-data">
-                                    {% csrf_token %}
-                                    <div class="input-group">
-                                        {{ upload_form.file }}
-                                        <button type="submit" class="btn btn-success">
-                                            <i class="fas fa-upload"></i> Загрузить
-                                        </button>
+                                {% endif %}
+                            </form>
+                        </div>
+                        <!-- Upload File Form -->
+                        <div class="col-lg-6">
+                            <h5 class="card-title mb-2">Загрузить файл</h5>
+                            <form method="post" action="{% url 's3app:upload_file_path' path=current_path|default:'root' %}" enctype="multipart/form-data" class="action-form">
+                                {% csrf_token %}
+                                <div class="input-group">
+                                    {{ upload_form.file }} {# Assumes widget has 'form-control' class #}
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-upload me-1"></i> Загрузить
+                                    </button>
+                                </div>
+                                {% if upload_form.file.errors %}
+                                    <div class="invalid-feedback d-block mt-1">
+                                        {% for error in upload_form.file.errors %}{{ error }}{% endfor %}
                                     </div>
-                                    {% if upload_form.file.errors %}
-                                        <div class="invalid-feedback d-block">
-                                            {% for error in upload_form.file.errors %}{{ error }}{% endfor %}
-                                        </div>
-                                    {% endif %}
-                                </form>
-                            </div>
+                                {% endif %}
+                            </form>
                         </div>
                     </div>
                 </div>
             </div>
-            {% endif %}
+        </div>
+        {% endif %}
 
-            <!-- File Browser / Search Results -->
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <!-- Header Title (remains the same) -->
-                        <h5 class="header-title mb-0">
-                            {% if is_search_view %}
-                                <i class="fas fa-search"></i> Результаты поиска для "{{ search_query }}" {% if current_path %}в "{{ current_path }}"{% else %}в корне{% endif %}
-                            {% elif current_path %}
-                                <i class="fas fa-folder-open"></i> {{ current_path }}
-                            {% else %}
-                                <i class="fas fa-folder-open"></i> Корневая директория
-                            {% endif %}
-                        </h5>
-                        <!-- Search form (remains the same) -->
-                         <form method="get" class="d-flex ms-auto" style="max-width: 300px;" role="search" action="{% if current_path %}{% url 's3app:browser_path' path=current_path %}{% else %}{% url 's3app:browser' %}{% endif %}">
-                            <input type="text" name="q" class="form-control form-control-sm me-2" placeholder="Поиск файлов и папок..." value="{{ search_query }}">
-                            <button type="submit" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-search"></i>
-                            </button>
-                            {% if search_query %}
-                            <a href="{% if current_path %}{% url 's3app:browser_path' path=current_path %}{% else %}{% url 's3app:browser' %}{% endif %}" class="btn btn-sm btn-outline-secondary ms-1" title="Очистить поиск">
-                                <i class="fas fa-times"></i>
-                            </a>
-                            {% endif %}
-                        </form>
-                    </div>
-                    <div class="card-body">
-
+        <!-- File Browser / Search Results -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <!-- Header Title -->
+                    <h5 class="header-title mb-0 text-truncate">
                         {% if is_search_view %}
-                            {# --- SEARCH RESULTS TABLE --- #}
-                            {% if search_results %}
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                    <tr>
-                                        <th style="width: 50%">Полный путь / Имя</th> {# Changed header slightly #}
-                                        <th>Размер</th>
-                                        <th>Дата изменения</th>
-                                        <th>Действия</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
+                            <i class="fas fa-search me-1"></i> Результаты поиска "{{ search_query }}" {% if current_path %}в "{{ current_path }}"{% else %}в корне{% endif %}
+                        {% elif current_path %}
+                            <i class="fas fa-folder-open me-1"></i> {{ current_path }}
+                        {% else %}
+                            <i class="fas fa-folder-open me-1"></i> Корневая директория
+                        {% endif %}
+                    </h5>
+                    <!-- Search form -->
+                    <form method="get" class="d-flex browser-search-form ms-lg-auto" role="search" action="{% if current_path %}{% url 's3app:browser_path' path=current_path %}{% else %}{% url 's3app:browser' %}{% endif %}">
+                        <input type="search" name="q" class="form-control form-control-sm me-2" placeholder="Поиск..." value="{{ search_query|default:'' }}" aria-label="Поиск файлов и папок">
+                        <button type="submit" class="btn btn-sm btn-outline-primary flex-shrink-0" aria-label="Найти">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        {% if search_query %}
+                        <a href="{% if current_path %}{% url 's3app:browser_path' path=current_path %}{% else %}{% url 's3app:browser' %}{% endif %}" class="btn btn-sm btn-outline-secondary ms-1 flex-shrink-0" title="Очистить поиск" aria-label="Очистить поиск">
+                            <i class="fas fa-times"></i>
+                        </a>
+                        {% endif %}
+                    </form>
+                </div>
+                <div class="card-body">
+                    <!-- Multi-action Panel -->
+                    <div id="multiActionPanel" class="multi-actions mb-3">
+                        <span class="selected-count me-3">Выбрано: <strong id="selectedCount">0</strong></span>
+                        <div class="multi-action-buttons">
+                            <button id="downloadSelected" class="btn btn-sm btn-primary" disabled>
+                                <i class="fas fa-download me-1"></i> Скачать
+                            </button>
+                            <button id="deleteSelected" class="btn btn-sm btn-danger" disabled>
+                                <i class="fas fa-trash me-1"></i> Удалить
+                            </button>
+                            <button id="selectAll" class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-check-square me-1"></i> Выбрать все
+                            </button>
+                            <button id="deselectAll" class="btn btn-sm btn-outline-secondary">
+                                <i class="far fa-square me-1"></i> Отменить выбор
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Table Responsive Wrapper -->
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle file-browser-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col" style="width: 40px;" class="text-center"><input type="checkbox" id="selectAllCheckbox" class="form-check-input file-checkbox" title="Выбрать все на странице"></th>
+                                    <th scope="col">Имя {% if is_search_view %}/ Путь{% endif %}</th>
+                                    <th scope="col">Размер</th>
+                                    <th scope="col">Дата изменения</th>
+                                    <th scope="col" class="text-center">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if is_search_view %}
+                                    {# SEARCH RESULTS #}
                                     {% for item in search_results %}
-                                        {# *** START: MODIFIED PART FOR SEARCH RESULTS *** #}
                                         {% if item.is_folder %}
-                                            {# --- Render Folder Row --- #}
                                             <tr class="folder-item">
-                                                <td>
-                                                    {# Link folder name to browse that path. Use slice filter to remove trailing '/' for the URL #}
-                                                    <a href="{% url 's3app:browser_path' path=item.path|slice:":-1" %}" class="text-decoration-none text-dark">
-                                                        <i class="fas fa-folder folder-icon"></i> {{ item.display_path }} {# Show full path ending in / #}
+                                                <td data-label="Выбрать" class="text-center"><input type="checkbox" class="form-check-input file-checkbox item-checkbox" data-type="folder" data-path="{{ item.path|slice:":-1" }}" title="Выбрать папку {{ item.display_path }}"></td>
+                                                <td data-label="Имя / Путь" class="file-name-cell">
+                                                    <a href="{% url 's3app:browser_path' path=item.path|slice:":-1" %}" class="text-decoration-none file-name-link">
+                                                        <i class="fas fa-folder folder-icon me-2"></i>
+                                                        <span class="file-name-text">{{ item.display_path }}</span>
                                                     </a>
                                                 </td>
-                                                <td>-</td> {# No size for folders #}
-                                                <td>{{ item.last_modified|date:"d.m.Y H:i"|default:"-" }}</td> {# Show date if available, else '-' #}
-                                                <td>
+                                                <td data-label="Размер">-</td>
+                                                <td data-label="Дата изменения"><span class="text-nowrap">{{ item.last_modified|date:"d.m.Y H:i"|default:"-" }}</span></td>
+                                                <td data-label="Действия" class="actions-cell">
                                                     <div class="action-buttons">
-                                                        {# Delete folder action. Use slice filter to remove trailing '/' for the URL #}
-                                                        <a href="{% url 's3app:delete_folder' path=item.path|slice:":-1" %}" class="btn btn-sm btn-danger" title="Удалить папку" onclick="return confirm('Вы уверены, что хотите удалить папку {{ item.display_path }} и всё её содержимое?')">
+                                                        {# Note: Search results might not have simple delete/download for folders directly, adjust URL/logic if needed #}
+                                                        {# Example: Delete button for folder search result (might need different view/logic) #}
+                                                        <a href="{% url 's3app:delete_folder' path=item.path|slice:":-1" %}" class="btn btn-sm btn-danger action-btn" title="Удалить папку {{ item.display_path }}" onclick="return confirm('Вы уверены, что хотите удалить папку {{ item.display_path }} и всё её содержимое?')">
                                                             <i class="fas fa-trash"></i>
                                                         </a>
                                                     </div>
                                                 </td>
                                             </tr>
                                         {% else %}
-                                            {# --- Render File Row (Similar to before) --- #}
                                             <tr class="file-item">
-                                                <td>
-                                                    <a href="{% url 's3app:download_file' path=item.path %}" class="text-decoration-none text-dark">
-                                                        <i class="fas fa-file file-icon"></i> {{ item.display_path }} {# Show full path #}
+                                                <td data-label="Выбрать" class="text-center"><input type="checkbox" class="form-check-input file-checkbox item-checkbox" data-type="file" data-path="{{ item.path }}" title="Выбрать файл {{ item.display_path }}"></td>
+                                                <td data-label="Имя / Путь" class="file-name-cell">
+                                                     {# Link downloads the file #}
+                                                    <a href="{% url 's3app:download_file' path=item.path %}" class="text-decoration-none file-name-link" title="Скачать {{ item.display_path }}">
+                                                        <i class="fas fa-file file-icon me-2"></i>
+                                                        <span class="file-name-text">{{ item.display_path }}</span>
                                                     </a>
                                                 </td>
-                                                <td>{{ item.size|filesizeformat }}</td>
-                                                <td>{{ item.last_modified|date:"d.m.Y H:i" }}</td>
-                                                <td>
+                                                <td data-label="Размер"><span class="text-nowrap">{{ item.size|filesizeformat }}</span></td>
+                                                <td data-label="Дата изменения"><span class="text-nowrap">{{ item.last_modified|date:"d.m.Y H:i" }}</span></td>
+                                                <td data-label="Действия" class="actions-cell">
                                                     <div class="action-buttons">
-                                                        <a href="{% url 's3app:download_file' path=item.path %}" class="btn btn-sm btn-primary" title="Скачать">
+                                                        <a href="{% url 's3app:download_file' path=item.path %}" class="btn btn-sm btn-primary action-btn" title="Скачать {{ item.display_path }}">
                                                             <i class="fas fa-download"></i>
                                                         </a>
-                                                        <a href="{% url 's3app:delete_file' path=item.path %}" class="btn btn-sm btn-danger" title="Удалить" onclick="return confirm('Вы уверены, что хотите удалить файл {{ item.path }}?')">
-                                                            <i class="fas fa-trash"></i>
-                                                        </a>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        {% endif %}
-                                        {# *** END: MODIFIED PART FOR SEARCH RESULTS *** #}
-                                    {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {% else %}
-                                <div class="alert alert-info text-center">
-                                    <i class="fas fa-info-circle me-2"></i> Файлы или папки не найдены.
-                                </div>
-                            {% endif %}
-
-                        {% else %}
-                            {# --- REGULAR BROWSER TABLE (with pagination) --- #}
-                            {# This part remains unchanged, pagination still applies to browsing #}
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                    <tr>
-                                        <th style="width: 50%">Имя</th>
-                                        <th>Размер</th>
-                                        <th>Дата изменения</th>
-                                        <th>Действия</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    {% for item in page_obj %}
-                                        {% comment %} Check if item has 'size', indicating a file {% endcomment %}
-                                        {% if item.size is not None %} {# Check size explicitly for file #}
-                                            <tr class="file-item">
-                                                <td><a href="{% url 's3app:download_file' path=item.path %}" class="text-decoration-none text-dark">
-                                                    <i class="fas fa-file file-icon"></i> {{ item.name }}</a></td>
-                                                <td>{{ item.size|filesizeformat }}</td>
-                                                <td>{{ item.last_modified|date:"d.m.Y H:i" }}</td>
-                                                <td>
-                                                    <div class="action-buttons">
-                                                        <a href="{% url 's3app:download_file' path=item.path %}" class="btn btn-sm btn-primary" title="Скачать">
-                                                            <i class="fas fa-download"></i>
-                                                        </a>
-                                                        <a href="{% url 's3app:delete_file' path=item.path %}" class="btn btn-sm btn-danger" title="Удалить" onclick="return confirm('Вы уверены, что хотите удалить файл {{ item.name }}?')">
-                                                            <i class="fas fa-trash"></i>
-                                                        </a>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        {% else %} {# Assumed directory if no size (from list_objects) #}
-                                            <tr class="folder-item">
-                                                <td><a href="{% url 's3app:browser_path' path=item.path %}" class="text-decoration-none text-dark">
-                                                    <i class="fas fa-folder folder-icon"></i> {{ item.name }}</a></td>
-                                                <td>-</td>
-                                                <td></td> {# Directories don't have LastModified in CommonPrefixes #}
-                                                <td>
-                                                    <div class="action-buttons">
-                                                        <a href="{% url 's3app:delete_folder' path=item.path %}" class="btn btn-sm btn-danger" title="Удалить папку" onclick="return confirm('Вы уверены, что хотите удалить папку {{ item.name }} и всё её содержимое?')">
+                                                        <a href="{% url 's3app:delete_file' path=item.path %}" class="btn btn-sm btn-danger action-btn" title="Удалить {{ item.display_path }}" onclick="return confirm('Вы уверены, что хотите удалить файл {{ item.path }}?')">
                                                             <i class="fas fa-trash"></i>
                                                         </a>
                                                     </div>
@@ -231,48 +193,133 @@
                                             </tr>
                                         {% endif %}
                                     {% empty %}
-                                        <tr><td colspan="4" class="text-center py-3">
-                                            <i class="fas fa-info-circle me-2"></i> Папка пуста
+                                        <tr><td colspan="5" class="text-center py-4">
+                                            <i class="fas fa-info-circle me-2"></i> В результатах поиска ничего не найдено.
                                         </td></tr>
                                     {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
 
-                            {# --- PAGINATION (remains the same, only for browsing view) --- #}
-                            {% if page_obj and page_obj.paginator.num_pages > 1 %}
-                            <div class="mt-4">
-                                <nav aria-label="Навигация по страницам">
-                                    <ul class="pagination justify-content-center">
-                                        {% if page_obj.has_previous %}
-                                            <li class="page-item">
-                                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Назад</a>
-                                            </li>
-                                        {% else %}
-                                            <li class="page-item disabled"><span class="page-link">Назад</span></li>
+                                {% else %}
+                                    {# REGULAR BROWSER #}
+                                    {% for item in page_obj %}
+                                        {% if item.size is not None %} {# It's a file #}
+                                            <tr class="file-item">
+                                                <td data-label="Выбрать" class="text-center"><input type="checkbox" class="form-check-input file-checkbox item-checkbox" data-type="file" data-path="{{ item.path }}" title="Выбрать файл {{ item.name }}"></td>
+                                                <td data-label="Имя" class="file-name-cell">
+                                                    {# Link downloads the file #}
+                                                    <a href="{% url 's3app:download_file' path=item.path %}" class="text-decoration-none file-name-link" title="Скачать {{ item.name }}">
+                                                        <i class="fas fa-file file-icon me-2"></i>
+                                                        <span class="file-name-text">{{ item.name }}</span>
+                                                    </a>
+                                                </td>
+                                                <td data-label="Размер"><span class="text-nowrap">{{ item.size|filesizeformat }}</span></td>
+                                                <td data-label="Дата изменения"><span class="text-nowrap">{{ item.last_modified|date:"d.m.Y H:i" }}</span></td>
+                                                <td data-label="Действия" class="actions-cell">
+                                                    <div class="action-buttons">
+                                                        <a href="{% url 's3app:download_file' path=item.path %}" class="btn btn-sm btn-primary action-btn" title="Скачать {{ item.name }}">
+                                                            <i class="fas fa-download"></i>
+                                                        </a>
+                                                        <a href="{% url 's3app:delete_file' path=item.path %}" class="btn btn-sm btn-danger action-btn" title="Удалить {{ item.name }}" onclick="return confirm('Вы уверены, что хотите удалить файл {{ item.name }}?')">
+                                                            <i class="fas fa-trash"></i>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        {% else %} {# It's a folder #}
+                                            <tr class="folder-item">
+                                                <td data-label="Выбрать" class="text-center"><input type="checkbox" class="form-check-input file-checkbox item-checkbox" data-type="folder" data-path="{{ item.path }}" title="Выбрать папку {{ item.name }}"></td>
+                                                <td data-label="Имя" class="file-name-cell">
+                                                    {# Link navigates into the folder #}
+                                                    <a href="{% url 's3app:browser_path' path=item.path %}" class="text-decoration-none file-name-link">
+                                                        <i class="fas fa-folder folder-icon me-2"></i>
+                                                        <span class="folder-name-text">{{ item.name }}</span>
+                                                    </a>
+                                                </td>
+                                                <td data-label="Размер">-</td>
+                                                <td data-label="Дата изменения"></td> {# Folders don't typically have a direct last_modified from S3 listing prefixes #}
+                                                <td data-label="Действия" class="actions-cell">
+                                                    <div class="action-buttons">
+                                                        <a href="{% url 's3app:delete_folder' path=item.path %}" class="btn btn-sm btn-danger action-btn" title="Удалить папку {{ item.name }}" onclick="return confirm('Вы уверены, что хотите удалить папку {{ item.name }} и всё её содержимое?')">
+                                                            <i class="fas fa-trash"></i>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
                                         {% endif %}
+                                    {% empty %}
+                                        <tr><td colspan="5" class="text-center py-4">
+                                             <i class="fas fa-info-circle me-2"></i> Папка пуста или произошла ошибка при загрузке содержимого.
+                                        </td></tr>
+                                    {% endfor %}
+                                {% endif %} {# End is_search_view check #}
+                            </tbody>
+                        </table>
+                    </div> {# End table-responsive #}
 
-                                        <li class="page-item disabled">
-                                            <span class="page-link">Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>
+                    <!-- PAGINATION (only for regular browser view) -->
+                    {% if not is_search_view and page_obj and page_obj.paginator.num_pages > 1 %}
+                    <div class="pagination-container mt-3">
+                        <nav aria-label="Навигация по страницам">
+                            <ul class="pagination justify-content-center flex-wrap">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page=1{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" title="Первая страница" aria-label="Первая страница">
+                                            <i class="fas fa-angle-double-left"></i>
+                                        </a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" aria-label="Предыдущая страница">
+                                            <i class="fas fa-angle-left"></i>
+                                        </a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link"><i class="fas fa-angle-double-left"></i></span>
+                                    </li>
+                                    <li class="page-item disabled">
+                                        <span class="page-link"><i class="fas fa-angle-left"></i></span>
+                                    </li>
+                                {% endif %}
+
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if page_obj.number == num %}
+                                        <li class="page-item active" aria-current="page">
+                                            <span class="page-link">{{ num }}</span>
                                         </li>
+                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">{{ num }}</a>
+                                        </li>
+                                    {% elif num == page_obj.number|add:'-3' or num == page_obj.number|add:'3' %}
+                                         <li class="page-item disabled"><span class="page-link">...</span></li>
+                                    {% endif %}
+                                {% endfor %}
 
-                                        {% if page_obj.has_next %}
-                                            <li class="page-item">
-                                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">Вперёд</a>
-                                            </li>
-                                        {% else %}
-                                            <li class="page-item disabled"><span class="page-link">Вперёд</span></li>
-                                        {% endif %}
-                                    </ul>
-                                </nav>
-                            </div>
-                            {% endif %} {# End pagination block #}
-
-                        {% endif %} {# End is_search_view check #}
-
-                    </div> {# End card-body #}
-                </div> {# End card #}
-            </div> {# End col-12 #}
-        </div> {# End row #}
-    </div> {# End container-fluid #}
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" aria-label="Следующая страница">
+                                            <i class="fas fa-angle-right"></i>
+                                        </a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" title="Последняя страница" aria-label="Последняя страница">
+                                            <i class="fas fa-angle-double-right"></i>
+                                        </a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link"><i class="fas fa-angle-right"></i></span>
+                                    </li>
+                                    <li class="page-item disabled">
+                                        <span class="page-link"><i class="fas fa-angle-double-right"></i></span>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    </div>
+                    {% endif %}
+                </div> {# End card-body #}
+            </div> {# End card #}
+        </div> {# End col-12 #}
+    </div> {# End row #}
+</div> {# End container-fluid #}
 {% endblock %}
