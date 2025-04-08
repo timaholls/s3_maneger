@@ -241,7 +241,7 @@ def create_folder(request, path=''):
 
     # Перенаправляем на страницу просмотра текущей директории
     if path:
-        return redirect('s3app:browser_path', path=path)
+        return redirect('s3app:browser', path=path)
     else:
         return redirect('s3app:browser')
 
@@ -263,10 +263,10 @@ def delete_folder(request, path):
     except ClientError as e:
         messages.error(request, f'Ошибка при удалении папки: {str(e)}')
 
-    # Перенаправляем на страницу просмотра родительской директории
+    # Перенаправляем на родительскую директорию
     parent_path = '/'.join(path.split('/')[:-1])
     if parent_path:
-        return redirect('s3app:browser_path', path=parent_path)
+        return redirect('s3app:browser', path=parent_path)
     else:
         return redirect('s3app:browser')
 
@@ -300,7 +300,7 @@ def upload_file(request, path=''):
 
     # Перенаправляем на страницу просмотра текущей директории
     if path:
-        return redirect('s3app:browser_path', path=path)
+        return redirect('s3app:browser', path=path)
     else:
         return redirect('s3app:browser')
 
@@ -322,10 +322,10 @@ def delete_file(request, path):
     except ClientError as e:
         messages.error(request, f'Ошибка при удалении файла: {str(e)}')
 
-    # Перенаправляем на страницу просмотра родительской директории
+    # Перенаправляем на родительскую директорию
     parent_path = '/'.join(path.split('/')[:-1])
     if parent_path:
-        return redirect('s3app:browser_path', path=parent_path)
+        return redirect('s3app:browser', path=parent_path)
     else:
         return redirect('s3app:browser')
 
@@ -349,10 +349,10 @@ def download_file(request, path):
     except ClientError as e:
         messages.error(request, f'Ошибка при скачивании файла: {str(e)}')
 
-    # Перенаправляем на страницу просмотра родительской директории в случае ошибки
+    # Перенаправляем на родительскую директорию в случае ошибки
     parent_path = '/'.join(path.split('/')[:-1])
     if parent_path:
-        return redirect('s3app:browser_path', path=parent_path)
+        return redirect('s3app:browser', path=parent_path)
     else:
         return redirect('s3app:browser')
 

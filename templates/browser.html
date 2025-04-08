@@ -15,25 +15,33 @@
         <!-- Breadcrumbs -->
         <div class="col-12 mb-3">
             <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
+                <ol class="breadcrumb mb-0 me-3">
+                    <li class="breadcrumb-item">
+                        {% if current_path %}
+                            <a href="{% url 's3app:browser' %}"><i class="bi bi-house-door-fill"></i></a>
+                        {% else %}
+                            <i class="bi bi-house-door-fill"></i>
+                        {% endif %}
+                    </li>
                     {% for crumb in breadcrumbs %}
                         <li class="breadcrumb-item {% if forloop.last and not is_search_view %}active{% endif %}" {% if forloop.last and not is_search_view %}aria-current="page"{% endif %}>
                             {% if not forloop.last or is_search_view %}
                                 {% if crumb.path %}
-                                    <a href="{% url 's3app:browser_path' path=crumb.path %}">{{ crumb.name }}</a>
+                                    <a href="{% url 's3app:browser' path=crumb.path %}">{{ crumb.name }}</a>
                                 {% else %}
-                                    <a href="{% url 's3app:browser' %}"><i class="fas fa-home me-1"></i>{{ crumb.name }}</a>
+                                    {# This case might not be needed if root isn't in breadcrumbs #}
+                                    <a href="{% url 's3app:browser' %}">{{ crumb.name }}</a>
                                 {% endif %}
                             {% else %}
-                                 <span>{% if not crumb.path %}<i class="fas fa-home me-1"></i>{% endif %}{{ crumb.name }}</span>
+                                {{ crumb.name }}
                             {% endif %}
                         </li>
                     {% endfor %}
-                    {% if is_search_view %}
-                        <li class="breadcrumb-item active" aria-current="page">Результаты поиска "{{ search_query }}"</li>
-                    {% endif %}
                 </ol>
             </nav>
+            <button id="copy-folder-link-btn" class="btn btn-sm btn-outline-secondary ms-2" title="Скопировать ссылку на эту папку">
+                <i class="bi bi-link-45deg"></i> Копировать ссылку
+            </button>
         </div>
 
         <!-- Actions Panel (Only when browsing, not searching) -->
@@ -99,13 +107,13 @@
                         {% endif %}
                     </h5>
                     <!-- Search form -->
-                    <form method="get" class="d-flex browser-search-form ms-lg-auto" role="search" action="{% if current_path %}{% url 's3app:browser_path' path=current_path %}{% else %}{% url 's3app:browser' %}{% endif %}">
+                    <form method="get" class="d-flex browser-search-form ms-lg-auto" role="search" action="{% if current_path %}{% url 's3app:browser' path=current_path %}{% else %}{% url 's3app:browser' %}{% endif %}">
                         <input type="search" name="q" class="form-control form-control-sm me-2" placeholder="Поиск..." value="{{ search_query|default:'' }}" aria-label="Поиск файлов и папок">
                         <button type="submit" class="btn btn-sm btn-outline-primary flex-shrink-0" aria-label="Найти">
                             <i class="fas fa-search"></i>
                         </button>
                         {% if search_query %}
-                        <a href="{% if current_path %}{% url 's3app:browser_path' path=current_path %}{% else %}{% url 's3app:browser' %}{% endif %}" class="btn btn-sm btn-outline-secondary ms-1 flex-shrink-0" title="Очистить поиск" aria-label="Очистить поиск">
+                        <a href="{% if current_path %}{% url 's3app:browser' path=current_path %}{% else %}{% url 's3app:browser' %}{% endif %}" class="btn btn-sm btn-outline-secondary ms-1 flex-shrink-0" title="Очистить поиск" aria-label="Очистить поиск">
                             <i class="fas fa-times"></i>
                         </a>
                         {% endif %}
@@ -151,7 +159,7 @@
                                             <tr class="folder-item">
                                                 <td data-label="Выбрать" class="text-center"><input type="checkbox" class="form-check-input file-checkbox item-checkbox" data-type="folder" data-path="{{ item.path|slice:":-1" }}" title="Выбрать папку {{ item.display_path }}"></td>
                                                 <td data-label="Имя / Путь" class="file-name-cell">
-                                                    <a href="{% url 's3app:browser_path' path=item.path|slice:":-1" %}" class="text-decoration-none file-name-link">
+                                                    <a href="{% url 's3app:browser' path=item.path|slice:":-1" %}" class="text-decoration-none file-name-link">
                                                         <i class="fas fa-folder folder-icon me-2"></i>
                                                         <span class="file-name-text">{{ item.display_path }}</span>
                                                     </a>
@@ -229,7 +237,7 @@
                                                 <td data-label="Выбрать" class="text-center"><input type="checkbox" class="form-check-input file-checkbox item-checkbox" data-type="folder" data-path="{{ item.path }}" title="Выбрать папку {{ item.name }}"></td>
                                                 <td data-label="Имя" class="file-name-cell">
                                                     {# Link navigates into the folder #}
-                                                    <a href="{% url 's3app:browser_path' path=item.path %}" class="text-decoration-none file-name-link">
+                                                    <a href="{% url 's3app:browser' path=item.path %}" class="text-decoration-none file-name-link">
                                                         <i class="fas fa-folder folder-icon me-2"></i>
                                                         <span class="folder-name-text">{{ item.name }}</span>
                                                     </a>
@@ -322,4 +330,46 @@
         </div> {# End col-12 #}
     </div> {# End row #}
 </div> {# End container-fluid #}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const copyButton = document.getElementById('copy-folder-link-btn');
+    if (copyButton) {
+        copyButton.addEventListener('click', function() {
+            // Construct the URL to copy
+            let folderPath = "{{ current_path|default:'' }}";
+            let urlToCopy;
+            if (folderPath) {
+                // Need to encode the path properly for the URL template tag if it hasn't been passed encoded
+                // Assuming path context variable is already correctly formatted for the url tag
+                urlToCopy = "{{ request.scheme }}://{{ request.get_host }}{% url 's3app:browser' path='__PLACEHOLDER__' %}".replace('__PLACEHOLDER__', folderPath);
+            } else {
+                urlToCopy = "{{ request.scheme }}://{{ request.get_host }}{% url 's3app:browser' %}";
+            }
+
+            navigator.clipboard.writeText(urlToCopy).then(() => {
+                // Success feedback
+                const originalText = copyButton.innerHTML;
+                copyButton.innerHTML = '<i class="bi bi-check-lg"></i> Скопировано!';
+                copyButton.classList.add('btn-success');
+                copyButton.classList.remove('btn-outline-secondary');
+                setTimeout(() => {
+                    copyButton.innerHTML = originalText;
+                    copyButton.classList.remove('btn-success');
+                    copyButton.classList.add('btn-outline-secondary');
+                }, 2000); // Revert after 2 seconds
+            }).catch(err => {
+                console.error('Failed to copy URL: ', err);
+                // Optional: Show error feedback to user
+                alert('Не удалось скопировать ссылку.');
+            });
+        });
+    }
+
+    // ... rest of your existing browser.html JavaScript ...
+
+});
+</script>
 {% endblock %}

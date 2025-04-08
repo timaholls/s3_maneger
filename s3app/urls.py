@@ -17,8 +17,8 @@ urlpatterns = [
     path('browser-challenge/validate/', views.browser_challenge_validate_view, name='browser_challenge_validate'),
 
     # Маршруты для работы с файлами/папками в S3
-    path('browser/', views.browser_view, name='browser'),  # для корня
-    path('browser/<path:path>/', views.browser_view, name='browser_path'),
+    path('browser/', views.browser_view, name='browser'),  # Handles root: /browser/
+    path('browser/<path:path>/', views.browser_view, name='browser'),  # Handles paths: /browser/some/path/
     path('create-folder/', views.create_folder, name='create_folder'),
     # Изменяем этот маршрут, чтобы он принимал пустой параметр path
     path('create-folder/<path:path>/', views.create_folder, name='create_folder_path'),

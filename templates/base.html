@@ -33,7 +33,7 @@
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     {% if user.is_authenticated %}
                     <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'browser' or request.resolver_match.url_name == 'browser_path' %}active{% endif %}" href="{% url 's3app:browser' %}">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'browser' %}active{% endif %}" href="{% url 's3app:browser' %}">
                             <i class="fas fa-folder me-1"></i> Файлы
                         </a>
                     </li>
