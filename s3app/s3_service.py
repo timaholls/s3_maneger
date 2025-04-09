@@ -316,6 +316,7 @@ class S3Service:
             self.log_action(user, 'search', f"{s3_prefix or '(root)'} (query: {query})", success=False,
                             details=f"Permission denied during search: {str(e)}")
             raise
+
     def create_folder(self, user, folder_path):
         """Создание новой папки (директории) в S3"""
         # Нормализуем путь ДО проверки прав
@@ -463,7 +464,6 @@ class S3Service:
              self.log_action(user, 'delete', normalized_file_path, success=False, details="Attempted to delete a folder using delete_file method.")
              raise ValueError("Для удаления папок используйте метод delete_folder")
 
-
         if not self.check_permission(user, folder_path, 'delete'):
             raise PermissionDenied("У вас нет прав для удаления файлов из этой папки")
 
@@ -529,3 +529,64 @@ class S3Service:
         # Заменяем множественные слеши на один
         path = '/'.join(filter(None, path.split('/')))
         return path
+
+    def list_all_folders(self):
+        """Получение списка всех папок в хранилище для автозаполнения"""
+        folders = set([''])  # Включаем корневую папку
+
+        try:
+            paginator = self.s3_client.get_paginator('list_objects_v2')
+            pages = paginator.paginate(
+                Bucket=self.bucket_name,
+                Delimiter='/'
+            )
+
+            # Обрабатываем первый уровень папок
+            for page in pages:
+                if 'CommonPrefixes' in page:
+                    for prefix in page['CommonPrefixes']:
+                        prefix_path = prefix['Prefix'].rstrip('/')
+                        folders.add(prefix_path)
+
+                        # Рекурсивно получаем подпапки
+                        self._get_subfolders(prefix_path, folders)
+
+            # Преобразуем set в список и сортируем
+            folders_list = sorted(list(folders))
+
+            return folders_list
+
+        except ClientError as e:
+            print(f"Error listing all folders: {str(e)}")
+            return []
+
+    def _get_subfolders(self, parent_path, folders_set):
+        """Рекурсивное получение подпапок для указанного пути"""
+        try:
+            # Добавляем слеш в конец для получения содержимого папки
+            prefix = parent_path + '/' if parent_path else ''
+
+            paginator = self.s3_client.get_paginator('list_objects_v2')
+            pages = paginator.paginate(
+                Bucket=self.bucket_name,
+                Prefix=prefix,
+                Delimiter='/'
+            )
+
+            for page in pages:
+                if 'CommonPrefixes' in page:
+                    for sub_prefix in page['CommonPrefixes']:
+                        sub_path = sub_prefix['Prefix'].rstrip('/')
+
+                        # Пропускаем, если это текущая папка
+                        if sub_path == parent_path:
+                            continue
+
+                        # Добавляем папку в набор
+                        folders_set.add(sub_path)
+
+                        # Рекурсивно получаем подпапки
+                        self._get_subfolders(sub_path, folders_set)
+
+        except ClientError as e:
+            print(f"Error getting subfolders for {parent_path}: {str(e)}")

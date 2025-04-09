@@ -10,7 +10,7 @@ from django.http import JsonResponse, HttpResponse
 from botocore.exceptions import ClientError
 from django import forms
 from .forms import LoginForm  # ... другие формы ...
-from .captcha import Captcha  # <-- Импортируем класс Captcha
+from .captcha import Captcha  # Импортируем класс Captcha
 
 from .models import UserPermission, S3ActionLog
 from .forms import (
@@ -100,7 +100,7 @@ def browser_challenge_page_view(request):
     return render(request, 'browser_challenge.html', {'next_url': next_url})
 
 
-@ensure_csrf_cookie  # <-- ADD THIS DECORATOR
+@ensure_csrf_cookie  # ADD THIS DECORATOR
 @csrf_protect  # Требует валидный CSRF токен для POST
 @require_http_methods(["POST"])  # Разрешаем только POST
 def browser_challenge_validate_view(request):
@@ -157,6 +157,15 @@ def browser_view(request, path=''):
     s3_service = S3Service()
     search_query = request.GET.get('q', '').strip()  # Keep query separate
 
+    # Получаем количество элементов на странице из GET-параметра или используем значение по умолчанию
+    try:
+        items_per_page = int(request.GET.get('per_page', 10))
+        # Проверка на допустимые значения
+        if items_per_page not in [10, 20, 50, 100]:
+            items_per_page = 10
+    except ValueError:
+        items_per_page = 10
+
     context = {
         'current_path': path,
         'parent_path': '/'.join(path.split('/')[:-1]) if path else None,
@@ -167,6 +176,7 @@ def browser_view(request, path=''):
         'is_search_view': bool(search_query),  # Flag for template
         'search_results': [],  # Initialize search results list
         'page_obj': None,  # Initialize page_obj
+        'items_per_page': items_per_page,  # Добавляем в контекст количество элементов на странице
     }
 
     try:
@@ -191,7 +201,7 @@ def browser_view(request, path=''):
 
             from django.core.paginator import Paginator  # Keep Paginator import
 
-            paginator = Paginator(all_items, 10)  # Changed to 10 items per page
+            paginator = Paginator(all_items, items_per_page)  # Используем динамическое количество элементов на странице
             page_number = request.GET.get('page')
             context['page_obj'] = paginator.get_page(page_number)
 
@@ -205,7 +215,7 @@ def browser_view(request, path=''):
     except ClientError as e:
         error_message = f'Ошибка при взаимодействии с S3: {str(e)}'
         # Check for specific S3 errors if needed
-        # if e.response['Error']['Code'] == '...':
+        # if e.response['Error']['Code'] == '...'
         messages.error(request, error_message)
         # Log the detailed error for admin/debugging
         print(f"S3 ClientError in browser_view (path: {path}, query: {search_query}): {e}")
@@ -443,24 +453,54 @@ def user_permissions(request, user_id):
 
     if request.method == 'POST':
         form = UserPermissionForm(request.POST)
-        if form.is_valid():
-            # Проверяем, существуют ли уже права для этой папки
-            folder_path = form.cleaned_data['folder_path']
-            existing_perm = UserPermission.objects.filter(user=user, folder_path=folder_path).first()
+        # Получаем список путей из запроса - jQuery отправляет массив как folder_paths[]
+        folder_paths = request.POST.getlist('folder_paths[]')
 
-            if existing_perm:
-                # Обновляем существующие права
-                existing_perm.can_read = form.cleaned_data['can_read']
-                existing_perm.can_write = form.cleaned_data['can_write']
-                existing_perm.can_delete = form.cleaned_data['can_delete']
-                existing_perm.save()
-                messages.success(request, f'Права доступа обновлены для {folder_path}')
-            else:
-                # Создаем новые права
-                perm = form.save(commit=False)
-                perm.user = user
-                perm.save()
-                messages.success(request, f'Права доступа добавлены для {folder_path}')
+        # Если нет путей, добавляем корневой путь
+        if not folder_paths:
+            folder_paths = ['']
+
+        if form.is_valid():
+            # Общие права для всех путей
+            can_read = form.cleaned_data['can_read']
+            can_write = form.cleaned_data['can_write']
+            can_delete = form.cleaned_data['can_delete']
+
+            added_paths = []
+            updated_paths = []
+
+            # Обрабатываем каждый путь отдельно
+            for folder_path in folder_paths:
+                # Нормализуем путь
+                folder_path = folder_path.strip()
+
+                # Проверяем, существуют ли уже права для этой папки
+                existing_perm = UserPermission.objects.filter(user=user, folder_path=folder_path).first()
+
+                if existing_perm:
+                    # Обновляем существующие права
+                    existing_perm.can_read = can_read
+                    existing_perm.can_write = can_write
+                    existing_perm.can_delete = can_delete
+                    existing_perm.save()
+                    updated_paths.append(folder_path or '(корень)')
+                else:
+                    # Создаем новые права
+                    UserPermission.objects.create(
+                        user=user,
+                        folder_path=folder_path,
+                        can_read=can_read,
+                        can_write=can_write,
+                        can_delete=can_delete
+                    )
+                    added_paths.append(folder_path or '(корень)')
+
+            # Формируем сообщения
+            if added_paths:
+                messages.success(request, f'Добавлены права доступа для папок: {", ".join(added_paths)}')
+
+            if updated_paths:
+                messages.success(request, f'Обновлены права доступа для папок: {", ".join(updated_paths)}')
 
             return redirect('s3app:user_permissions', user_id=user.id)
     else:
@@ -620,6 +660,35 @@ def delete_multiple(request):
     }
 
     return JsonResponse(response_data)
+
+
+@staff_member_required
+def folders_autocomplete(request):
+    """AJAX обработчик для автозаполнения путей папок"""
+    term = request.GET.get('term', '').strip()
+
+    if not term or len(term) < 2:
+        return JsonResponse([], safe=False)
+
+    s3_service = S3Service()
+
+    try:
+        # Получаем все папки
+        all_folders = s3_service.list_all_folders()
+
+        # Фильтруем их по поисковому запросу (регистронезависимо)
+        term_lower = term.lower()
+        matching_folders = [folder for folder in all_folders if term_lower in folder.lower()]
+
+        # Ограничиваем количество результатов
+        matching_folders = matching_folders[:10]
+
+        return JsonResponse(matching_folders, safe=False)
+
+    except Exception as e:
+        # В случае ошибки возвращаем пустой список
+        print(f"Error in folders_autocomplete: {str(e)}")
+        return JsonResponse([], safe=False)
 
 
 def _get_breadcrumbs(path):

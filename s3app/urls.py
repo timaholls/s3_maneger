@@ -56,4 +56,7 @@ urlpatterns = [
 
     # Маршруты для просмотра логов
     path('logs/', views.action_logs, name='action_logs'),
+
+    # Новый маршрут для автозаполнения папок
+    path('folders-autocomplete/', views.folders_autocomplete, name='folders_autocomplete'),
 ]

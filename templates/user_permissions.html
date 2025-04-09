@@ -9,7 +9,6 @@
          {# Button moved below the form card for better flow on mobile #}
     </div>
 
-
     <div class="row g-4"> {# Added gap between columns #}
         <!-- Список прав доступа -->
         <div class="col-lg-8"> {# Use lg for breakpoint if preferred #}
@@ -86,7 +85,7 @@
                     <h5 class="card-title mb-0 fw-semibold">Добавить/Изменить права</h5>
                 </div>
                 <div class="card-body">
-                    <form method="post" novalidate>
+                    <form method="post" novalidate id="permissionForm">
                         {% csrf_token %}
 
                         {# Assuming user is set in view and widget is HiddenInput #}
@@ -101,18 +100,23 @@
                         </div>
                         {% endif %}
 
-                        <div class="mb-3">
-                            {# Use field object directly for label, id, help_text #}
-                            <label for="{{ form.folder_path.id_for_label }}" class="form-label fw-medium">{{ form.folder_path.label }}</label>
-                            {{ form.folder_path }} {# Widget defined in forms.py has class #}
-                             {% if form.folder_path.help_text %}
-                                <small class="form-text text-muted d-block mt-1">{{ form.folder_path.help_text }}</small>
-                             {% endif %}
-                            {% if form.folder_path.errors %}
-                            <div class="invalid-feedback d-block">
-                                {% for error in form.folder_path.errors %}{{ error }}{% endfor %}
+                        <div id="paths-container">
+                            <div class="mb-3 path-input-group">
+                                {# Use field object directly for label, id, help_text #}
+                                <label for="{{ form.folder_path.id_for_label }}" class="form-label fw-medium">{{ form.folder_path.label }}</label>
+                                <div class="d-flex">
+                                    <div class="flex-grow-1 position-relative">
+                                        <input type="text" name="folder_paths[]" class="form-control path-input" placeholder="folder/subfolder/ (пусто = корень)" autocomplete="off">
+                                        <div class="path-suggestions d-none position-absolute bg-white border rounded w-100 overflow-auto" style="max-height: 200px; z-index: 1000;"></div>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-primary ms-2 add-path-btn" title="Добавить еще один путь">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                {% if form.folder_path.help_text %}
+                                    <small class="form-text text-muted d-block mt-1">{{ form.folder_path.help_text }}</small>
+                                {% endif %}
                             </div>
-                            {% endif %}
                         </div>
 
                         <fieldset class="mb-3">
@@ -139,7 +143,6 @@
                              </div>
                         </fieldset>
 
-
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary">
                                <i class="fas fa-save me-1"></i> Сохранить права
@@ -158,4 +161,157 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Функция для добавления нового поля пути
+    function addPathField() {
+        const container = document.getElementById('paths-container');
+        const index = container.querySelectorAll('.path-input-group').length;
+
+        const group = document.createElement('div');
+        group.className = 'mb-3 path-input-group';
+
+        group.innerHTML = `
+            <div class="d-flex">
+                <div class="flex-grow-1 position-relative">
+                    <input type="text" name="folder_paths[]" class="form-control path-input" placeholder="folder/subfolder/ (пусто = корень)" autocomplete="off">
+                    <div class="path-suggestions d-none position-absolute bg-white border rounded w-100 overflow-auto" style="max-height: 200px; z-index: 1000;"></div>
+                </div>
+                <button type="button" class="btn btn-outline-danger ms-2 remove-path-btn" title="Удалить путь">
+                    <i class="fas fa-minus"></i>
+                </button>
+            </div>
+        `;
+
+        container.appendChild(group);
+        setupPathInputs(group.querySelectorAll('.path-input'));
+        setupRemoveButtons(group.querySelectorAll('.remove-path-btn'));
+    }
+
+    // Функция для настройки обработчиков событий поиска путей
+    function setupPathInputs(inputs) {
+        inputs.forEach(input => {
+            const suggestionsContainer = input.parentElement.querySelector('.path-suggestions');
+
+            input.addEventListener('input', debounce(function() {
+                const searchTerm = this.value.trim();
+                if (searchTerm.length < 2) {
+                    suggestionsContainer.classList.add('d-none');
+                    return;
+                }
+
+                // AJAX запрос для поиска путей
+                fetch(`/folders-autocomplete/?term=${encodeURIComponent(searchTerm)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.length > 0) {
+                            suggestionsContainer.innerHTML = '';
+                            data.forEach(path => {
+                                const item = document.createElement('div');
+                                item.className = 'p-2 suggestion-item border-bottom';
+                                item.textContent = path;
+                                item.addEventListener('click', function() {
+                                    input.value = path;
+                                    suggestionsContainer.classList.add('d-none');
+                                });
+                                suggestionsContainer.appendChild(item);
+                            });
+                            suggestionsContainer.classList.remove('d-none');
+                        } else {
+                            suggestionsContainer.classList.add('d-none');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Ошибка при поиске путей:', error);
+                    });
+            }, 300));
+
+            // Скрытие подсказок при клике вне поля ввода
+            document.addEventListener('click', function(event) {
+                if (!input.contains(event.target) && !suggestionsContainer.contains(event.target)) {
+                    suggestionsContainer.classList.add('d-none');
+                }
+            });
+        });
+    }
+
+    // Функция для настройки кнопок удаления
+    function setupRemoveButtons(buttons) {
+        buttons.forEach(button => {
+            button.addEventListener('click', function() {
+                this.closest('.path-input-group').remove();
+            });
+        });
+    }
+
+    // Функция debounce для сокращения количества запросов при вводе
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), wait);
+        };
+    }
+
+    // Настройка кнопки добавления пути
+    const addPathBtn = document.querySelector('.add-path-btn');
+    if (addPathBtn) {
+        addPathBtn.addEventListener('click', addPathField);
+    }
+
+    // Настройка существующих полей ввода пути
+    setupPathInputs(document.querySelectorAll('.path-input'));
+
+    // Настройка отправки формы
+    const permissionForm = document.getElementById('permissionForm');
+    if (permissionForm) {
+        permissionForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+
+            // Собираем все пути и добавляем их как параметры формы
+            const paths = Array.from(document.querySelectorAll('.path-input')).map(input => input.value.trim());
+
+            // Очищаем существующие пути из FormData
+            for (let pair of formData.entries()) {
+                if (pair[0] === 'folder_paths[]') {
+                    formData.delete(pair[0]);
+                }
+            }
+
+            // Добавляем пути в FormData
+            paths.forEach(path => {
+                if (path) {
+                    formData.append('folder_paths[]', path);
+                }
+            });
+
+            // Если пользователь не выбрал ни одного пути, добавляем пустой путь (корень)
+            if (paths.length === 0 || paths.every(path => !path)) {
+                formData.append('folder_paths[]', '');
+            }
+
+            // Отправляем форму
+            fetch(permissionForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                }
+            }).then(response => {
+                // Перезагружаем страницу после успешной отправки
+                window.location.reload();
+            }).catch(error => {
+                console.error('Ошибка при отправке формы:', error);
+                alert('Произошла ошибка при сохранении прав. Пожалуйста, попробуйте еще раз.');
+            });
+        });
+    }
+});
+</script>
 {% endblock %}
