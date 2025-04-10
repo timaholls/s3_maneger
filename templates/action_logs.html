@@ -27,7 +27,7 @@
                             <td data-label="Время"><span class="text-nowrap">{{ log.timestamp|date:"d.m.Y H:i:s" }}</span></td>
                             <td data-label="Пользователь">{{ log.user.username|default:"Система/Аноним" }}</td>
                             <td data-label="Действие">
-                                {% with action=log.action_type %} {# Using with for cleaner badges #}
+                                {% with action=log.action %} {# Используем правильное имя поля #}
                                     {% if action == 'read' %}<span class="badge bg-info text-dark">Чтение</span>
                                     {% elif action == 'upload' %}<span class="badge bg-primary">Загрузка</span>
                                     {% elif action == 'download' %}<span class="badge bg-success">Скачивание</span>
@@ -44,7 +44,7 @@
                                     {% endif %}
                                 {% endwith %}
                             </td>
-                            <td data-label="Объект" class="text-break">{{ log.object_path|default:"N/A" }}</td>
+                            <td data-label="Объект" class="text-break">{{ log.path|default:"N/A" }}</td>
                             <td data-label="Статус" class="text-center">
                                 {% if log.success %}
                                 <span class="badge bg-success" title="Успешно"><i class="fas fa-check-circle"></i></span>

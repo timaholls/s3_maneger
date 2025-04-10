@@ -106,14 +106,20 @@ class S3Service:
 
     def log_action(self, user, action_type, object_path, success=True, ip_address=None, details=None):
         """Логирование действий пользователя"""
-        S3ActionLog.objects.create(
-            user=user,
-            action_type=action_type,
-            object_path=object_path,
-            success=success,
-            ip_address=ip_address,
-            details=details
-        )
+        try:
+            from .models import S3ActionLog
+            S3ActionLog.objects.create(
+                user=user,
+                action=action_type,  # Changed from action_type to action
+                path=object_path,    # Changed from object_path to path
+                success=success,
+                ip_address=ip_address,
+                details=details
+            )
+        except Exception as e:
+            # If the table doesn't exist or any other issue occurs, print a message
+            # but don't stop the application
+            print(f"Error logging action: {str(e)}")
 
     def list_objects(self, user, prefix='', delimiter='/'):
         """Получение списка объектов в директории (с пагинацией S3)"""
@@ -151,6 +157,11 @@ class S3Service:
                         if prefix_path not in processed_dirs:
                             # Извлекаем имя последней части пути
                             dir_name = prefix_path.rstrip('/').split('/')[-1]
+
+                            # Скрываем папку __trash для обычных пользователей
+                            if dir_name == '__trash' and not user.is_superuser:
+                                continue
+
                             result['directories'].append({
                                 'name': dir_name,
                                 'path': prefix_path.rstrip('/') # Сохраняем путь без слеша на конце для консистентности
@@ -164,6 +175,10 @@ class S3Service:
                         # Пропускаем сам объект текущей директории (если он есть)
                         # Например, при prefix='folder/' может вернуться объект с Key='folder/'
                         if item_key == s3_prefix:
+                            continue
+
+                        # Скрываем файлы и папки внутри __trash для обычных пользователей
+                        if not user.is_superuser and ('__trash/' in item_key or item_key.startswith('__trash/')):
                             continue
 
                         # Извлекаем имя файла/объекта относительно текущего префикса
@@ -184,9 +199,18 @@ class S3Service:
                         if relative_name.endswith('/') and item['Size'] == 0:
                             # Дополнительно проверим, нет ли уже такой директории из CommonPrefixes
                             dir_path_check = item_key.rstrip('/')
+
+                            # Пропускаем директории __trash для обычных пользователей
+                            dir_name = relative_name.rstrip('/')
+                            if dir_name == '__trash' and not user.is_superuser:
+                                continue
+
                             if not any(d['path'] == dir_path_check for d in result['directories']):
                                 # Если вдруг папка не пришла в CommonPrefixes, добавим ее
-                                dir_name = relative_name.rstrip('/')
+                                # Пропускаем папки __trash для обычных пользователей
+                                if dir_name == '__trash' and not user.is_superuser:
+                                    continue
+
                                 result['directories'].append({
                                     'name': dir_name,
                                     'path': dir_path_check
@@ -203,7 +227,11 @@ class S3Service:
                         })
 
             # Логируем успешное действие после получения всех данных
-            self.log_action(user, 'list', s3_prefix or '(root)')  # Changed action type slightly
+            # Move this inside try/except to continue even if logging fails
+            try:
+                self.log_action(user, 'list', s3_prefix or '(root)')  # Changed action type slightly
+            except Exception as e:
+                print(f"Error in logging list action: {str(e)}")
 
             result['directories'].sort(key=lambda x: x['name'])
             result['files'].sort(key=lambda x: x['name'])
@@ -211,10 +239,16 @@ class S3Service:
             return result
         except ClientError as e:
             # Логируем неудачное действие
-            self.log_action(user, 'read', s3_prefix or '(root)', success=False, details=str(e))
+            try:
+                self.log_action(user, 'read', s3_prefix or '(root)', success=False, details=str(e))
+            except Exception as log_error:
+                print(f"Error in logging error: {str(log_error)}")
             raise
-        except PermissionDenied as e: # Перехватываем PermissionDenied, чтобы залогировать его
-            self.log_action(user, 'read', s3_prefix or '(root)', success=False, details=f"Permission denied: {str(e)}")
+        except PermissionDenied as e:  # Перехватываем PermissionDenied, чтобы залогировать его
+            try:
+                self.log_action(user, 'read', s3_prefix or '(root)', success=False, details=f"Permission denied: {str(e)}")
+            except Exception as log_error:
+                print(f"Error in logging permission denied: {str(log_error)}")
             raise
 
     def search_objects(self, user, prefix='', query='', max_results=200):
@@ -257,6 +291,10 @@ class S3Service:
                         if item_key == s3_prefix:
                             continue
 
+                        # Скрываем объекты из папки __trash для обычных пользователей
+                        if not user.is_superuser and ('__trash/' in item_key or item_key.startswith('__trash/')):
+                            continue
+
                         # Determine if it's a folder (ends with / and usually size 0)
                         # We primarily rely on the trailing slash convention
                         is_folder = item_key.endswith('/')
@@ -269,13 +307,12 @@ class S3Service:
                         if not item_name:
                             continue
 
+                        # Скрываем директорию __trash для обычных пользователей
+                        if not user.is_superuser and item_name == '__trash':
+                            continue
+
                         # Check if the item_name (file or folder) contains the query
                         if query_lower in item_name.lower():
-                            # Optional: Check read permission on the specific parent folder
-                            # parent_folder = os.path.dirname(item_key.rstrip('/'))
-                            # if not self.check_permission(user, parent_folder, 'read'):
-                            #    continue # Skip if no permission
-
                             # Prepare item data
                             item_data = {
                                 'name': item_name,           # Just the name part

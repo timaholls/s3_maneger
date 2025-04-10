@@ -473,9 +473,6 @@ def user_edit(request, user_id):
             return redirect('s3app:user_list')
     else:
         form = UserCreationForm(instance=user)
-        # Делаем поля пароля необязательными при редактировании
-        form.fields['password1'].required = False
-        form.fields['password2'].required = False
 
     return render(request, 'user_form.html', {'form': form, 'title': 'Редактирование пользователя'})
 

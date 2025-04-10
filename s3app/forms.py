@@ -59,22 +59,20 @@ class UserPermissionForm(forms.ModelForm):
     # Explicitly define folder_path to override required status
     folder_path = forms.CharField(
         label="Путь к папке в S3",
-        required=False,  # <<< THIS IS THE FIX
+        required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
-            'placeholder': 'folder/subfolder/ (пусто = корень)' # Shortened placeholder
+            'placeholder': 'folder/subfolder/ (пусто = корень)'
         }),
         help_text="Путь к папке без начального '/'. Оставьте пустым для корневой папки.",
-        max_length=1024 # Match model max_length if needed
+        max_length=1024
     )
 
     class Meta:
         model = UserPermission
         fields = ['user', 'folder_path', 'can_read', 'can_write', 'can_delete']
         widgets = {
-            # Keep user widget definition if needed, although it might be hidden/set in view
-            'user': forms.HiddenInput(), # Assuming user is set in the view, hide it. Use Select if user chooses.
-            # folder_path widget is now defined above
+            'user': forms.HiddenInput(),
             'can_read': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
             }),
@@ -95,7 +93,8 @@ class UserCreationForm(forms.ModelForm):
             'class': 'form-control',
             'placeholder': 'Введите пароль',
             'autocomplete': 'new-password'
-        })
+        }),
+        required=False,
     )
     password2 = forms.CharField(
         label='Подтверждение пароля',
@@ -103,7 +102,8 @@ class UserCreationForm(forms.ModelForm):
             'class': 'form-control',
             'placeholder': 'Подтвердите пароль',
             'autocomplete': 'new-password'
-        })
+        }),
+        required=False,
     )
 
     class Meta:
@@ -139,14 +139,28 @@ class UserCreationForm(forms.ModelForm):
         # Валидация совпадения паролей
         password1 = self.cleaned_data.get("password1")
         password2 = self.cleaned_data.get("password2")
-        if password1 and password2 and password1 != password2:
-            raise forms.ValidationError("Пароли не совпадают")
+
+        # Если это создание нового пользователя (нет instance.pk), то пароль обязателен
+        if not self.instance.pk and not password1:
+            raise forms.ValidationError("Пароль обязателен при создании нового пользователя")
+
+        # Проверка совпадения паролей, только если хотя бы один из них указан
+        if password1 or password2:
+            if password1 != password2:
+                raise forms.ValidationError("Пароли не совпадают")
+
         return password2
 
     def save(self, commit=True):
         # Сохранение пароля в хешированном виде
         user = super().save(commit=False)
-        user.set_password(self.cleaned_data["password1"])
+
+        # Устанавливаем пароль только если он был указан
+        if self.cleaned_data.get("password1"):
+            user.set_password(self.cleaned_data["password1"])
+        elif not self.instance.pk:
+            user.set_password(self.cleaned_data["password1"])
+
         if commit:
             user.save()
         return user
