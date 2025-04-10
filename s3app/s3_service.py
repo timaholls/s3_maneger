@@ -57,7 +57,7 @@ class S3Service:
         # Получаем все права пользователя
         permissions = UserPermission.objects.filter(user=user)
         print(
-            f"All permissions found for user: {list(permissions.values_list('folder_path', 'can_read', 'can_write', 'can_delete'))}")  # DEBUG
+            f"All permissions found for user: {list(permissions.values_list('folder_path', 'can_read', 'can_write', 'can_delete', 'can_move'))}")  # DEBUG
 
         # Проверяем права для указанной папки и всех родительских папок
         check_path = normalized_path
@@ -68,7 +68,7 @@ class S3Service:
 
             if perm_for_path:
                 print(
-                    f"    Found permission object for '{check_path}': ID={perm_for_path.id}, Read={perm_for_path.can_read}, Write={perm_for_path.can_write}, Delete={perm_for_path.can_delete}")  # DEBUG
+                    f"    Found permission object for '{check_path}': ID={perm_for_path.id}, Read={perm_for_path.can_read}, Write={perm_for_path.can_write}, Delete={perm_for_path.can_delete}, Move={perm_for_path.can_move}")  # DEBUG
                 if required_permission == 'read' and perm_for_path.can_read:
                     print(f"    Read permission sufficient. Access granted.")  # DEBUG
                     return True
@@ -77,6 +77,9 @@ class S3Service:
                     return True
                 if required_permission == 'delete' and perm_for_path.can_delete:
                     print(f"    Delete permission sufficient. Access granted.")  # DEBUG
+                    return True
+                if required_permission == 'move' and perm_for_path.can_move:
+                    print(f"    Move permission sufficient. Access granted.")  # DEBUG
                     return True
                 # Если нашли права, но нужного нет
                 print(
@@ -902,3 +905,126 @@ class S3Service:
 
         except ClientError as e:
             print(f"Error getting subfolders for {parent_path}: {str(e)}")
+
+    def move_object(self, user, source_path, destination_folder, is_folder=False):
+        """Перемещение файла или папки из исходного пути в целевую папку"""
+        normalized_source_path = self._normalize_path(source_path)
+        normalized_destination_folder = self._normalize_path(destination_folder)
+
+        # Получаем родительский путь исходного файла/папки
+        source_parent_path = os.path.dirname(normalized_source_path) if not is_folder else normalized_source_path
+
+        # Проверяем права доступа к исходному пути (право на перемещение)
+        if not self.check_permission(user, source_parent_path, 'move'):
+            raise PermissionDenied("У вас нет прав для перемещения этого объекта")
+
+        # Проверяем права доступа к целевой папке (право на запись)
+        if not self.check_permission(user, normalized_destination_folder, 'write'):
+            raise PermissionDenied("У вас нет прав для записи в целевую папку")
+
+        # Получаем имя файла или папки из исходного пути
+        object_name = os.path.basename(normalized_source_path)
+
+        # Формируем целевой путь
+        destination_path = f"{normalized_destination_folder}/{object_name}" if normalized_destination_folder else object_name
+
+        try:
+            if is_folder:
+                # Перемещение папки и всего ее содержимого
+                # S3 не имеет атомарной операции перемещения, поэтому нужно скопировать все файлы и удалить исходные
+                moved_count = 0
+
+                # Добавляем слеш в конец пути для использования в префиксе
+                source_path_prefix = f"{normalized_source_path}/" if not normalized_source_path.endswith("/") else normalized_source_path
+
+                # Получаем список всех объектов в папке
+                paginator = self.s3_client.get_paginator('list_objects_v2')
+                pages = paginator.paginate(
+                    Bucket=self.bucket_name,
+                    Prefix=source_path_prefix
+                )
+
+                # Создаем целевую папку, если она еще не существует
+                target_folder_key = f"{destination_path}/" if not destination_path.endswith('/') else destination_path
+                self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=target_folder_key,
+                    Body=''
+                )
+
+                for page in pages:
+                    if 'Contents' in page:
+                        for obj in page['Contents']:
+                            source_key = obj['Key']
+
+                            # Пропускаем объект, если это сам префикс папки
+                            if source_key == source_path_prefix:
+                                continue
+
+                            # Определяем относительный путь от корня исходной папки
+                            relative_path = source_key[len(source_path_prefix):]
+                            target_key = f"{target_folder_key}{relative_path}"
+
+                            # Копируем объект в новое расположение
+                            self.s3_client.copy_object(
+                                Bucket=self.bucket_name,
+                                CopySource=f"{self.bucket_name}/{source_key}",
+                                Key=target_key
+                            )
+
+                            # Удаляем исходный объект
+                            self.s3_client.delete_object(
+                                Bucket=self.bucket_name,
+                                Key=source_key
+                            )
+
+                            moved_count += 1
+
+                # Удаляем исходную папку (пустой объект папки)
+                if normalized_source_path.endswith('/'):
+                    folder_key = normalized_source_path
+                else:
+                    folder_key = f"{normalized_source_path}/"
+
+                self.s3_client.delete_object(
+                    Bucket=self.bucket_name,
+                    Key=folder_key
+                )
+
+                # Логируем действие
+                self.log_action(user, 'move', f"{normalized_source_path} → {destination_path}")
+
+                return {
+                    'success': True,
+                    'message': f"Папка '{object_name}' успешно перемещена в '{normalized_destination_folder or 'Корень'}'",
+                    'moved_objects_count': moved_count
+                }
+
+            else:
+                # Перемещение файла
+                # Копируем файл в новое расположение
+                self.s3_client.copy_object(
+                    Bucket=self.bucket_name,
+                    CopySource=f"{self.bucket_name}/{normalized_source_path}",
+                    Key=destination_path
+                )
+
+                # Удаляем исходный файл
+                self.s3_client.delete_object(
+                    Bucket=self.bucket_name,
+                    Key=normalized_source_path
+                )
+
+                # Логируем действие
+                self.log_action(user, 'move', f"{normalized_source_path} → {destination_path}")
+
+                return {
+                    'success': True,
+                    'message': f"Файл '{object_name}' успешно перемещен в '{normalized_destination_folder or 'Корень'}'",
+                    'moved_objects_count': 1
+                }
+
+        except ClientError as e:
+            # Логируем неудачное действие
+            self.log_action(user, 'move', f"{normalized_source_path} → {destination_path}", success=False, details=str(e))
+            raise

@@ -10,11 +10,11 @@ class UserPermission(models.Model):
     can_read = models.BooleanField(default=True, verbose_name="Чтение")
     can_write = models.BooleanField(default=False, verbose_name="Запись")
     can_delete = models.BooleanField(default=False, verbose_name="Удаление")
+    can_move = models.BooleanField(default=False, verbose_name="Перемещение")  # Новое право для перемещения файлов и папок
 
     class Meta:
         verbose_name = "Право доступа"
         verbose_name_plural = "Права доступа"
-        # Уникальный ключ: пользователь + путь к папке
         unique_together = ('user', 'folder_path')
 
     def __str__(self):
@@ -26,6 +26,8 @@ class UserPermission(models.Model):
             permissions.append('Запись')
         if self.can_delete:
             permissions.append('Удаление')
+        if self.can_move:
+            permissions.append('Перемещение')
         return f"{self.user.username} - {path_display} - {', '.join(permissions)}"
 
 
@@ -41,6 +43,7 @@ class S3ActionLog(models.Model):
         ('search', 'Поиск'),
         ('upload', 'Загрузка файла'),
         ('restore', 'Восстановление из корзины'),
+        ('move', 'Перемещение'),  # Добавлено новое действие 'Перемещение'
     ]
 
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Пользователь")

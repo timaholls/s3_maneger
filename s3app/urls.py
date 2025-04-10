@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from django.views.generic.base import RedirectView
 from django.contrib.auth import views as auth_views
-from .forms import CustomPasswordChangeForm  # <-- Импортируйте вашу форму
+from .forms import CustomPasswordChangeForm  # Импортируйте вашу форму
 
 app_name = 's3app'
 
@@ -29,6 +29,11 @@ urlpatterns = [
     path('delete-file/<path:path>/', views.delete_file, name='delete_file'),
     path('download-file/<path:path>/', views.download_file, name='download_file'),
 
+    # Маршруты для перемещения файлов и папок
+    path('move-file/<path:path>/', views.move_file, name='move_file'),
+    path('move-folder/<path:path>/', views.move_folder, name='move_folder'),
+    path('move-multiple/', views.move_multiple, name='move_multiple'),
+
     # Добавляем новые URL для множественных операций
     path('download-multiple/', views.download_multiple, name='download_multiple'),
     path('delete-multiple/', views.delete_multiple, name='delete_multiple'),
@@ -36,7 +41,7 @@ urlpatterns = [
     # --- Новые URL для смены пароля ---
     path('password_change/',
          auth_views.PasswordChangeView.as_view(
-             form_class=CustomPasswordChangeForm,  # <-- Используйте вашу форму
+             form_class=CustomPasswordChangeForm,  # Используйте вашу форму
              template_name='password_change_form.html',
              success_url='../password_change/done/'
          ),

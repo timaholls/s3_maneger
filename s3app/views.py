@@ -402,6 +402,120 @@ def download_file(request, path):
         return redirect('s3app:browser')
 
 
+@login_required
+def move_file(request, path):
+    """Перемещение файла в другую папку"""
+    if not path:
+        messages.error(request, 'Невозможно переместить файл: некорректный путь')
+        return redirect('s3app:browser')
+
+    if request.method == 'POST':
+        destination_folder = request.POST.get('destination_folder', '').strip()
+
+        try:
+            # Перемещаем файл в другую папку
+            s3_service = S3Service()
+            result = s3_service.move_object(request.user, path, destination_folder, is_folder=False)
+            messages.success(request, result['message'])
+        except PermissionDenied as e:
+            messages.error(request, str(e))
+        except ClientError as e:
+            messages.error(request, f'Ошибка при перемещении файла: {str(e)}')
+
+    # Перенаправляем на родительскую директорию
+    parent_path = '/'.join(path.split('/')[:-1])
+    if parent_path:
+        return redirect('s3app:browser', path=parent_path)
+    else:
+        return redirect('s3app:browser')
+
+
+@login_required
+def move_folder(request, path):
+    """Перемещение папки в другую папку"""
+    if not path:
+        messages.error(request, 'Невозможно переместить корневую директорию')
+        return redirect('s3app:browser')
+
+    if request.method == 'POST':
+        destination_folder = request.POST.get('destination_folder', '').strip()
+
+        # Проверка, чтобы не перемещать папку в саму себя или свою подпапку
+        if destination_folder.startswith(path) or destination_folder == path:
+            messages.error(request, 'Невозможно переместить папку внутрь самой себя или в свою подпапку')
+            return redirect('s3app:browser', path=path)
+
+        try:
+            # Перемещаем папку в другую папку
+            s3_service = S3Service()
+            result = s3_service.move_object(request.user, path, destination_folder, is_folder=True)
+            messages.success(request, result['message'])
+        except PermissionDenied as e:
+            messages.error(request, str(e))
+        except ClientError as e:
+            messages.error(request, f'Ошибка при перемещении папки: {str(e)}')
+
+    # Перенаправляем на родительскую директорию
+    parent_path = '/'.join(path.split('/')[:-1])
+    if parent_path:
+        return redirect('s3app:browser', path=parent_path)
+    else:
+        return redirect('s3app:browser')
+
+
+@login_required
+@require_http_methods(["POST"])
+def move_multiple(request):
+    """Обработчик для перемещения нескольких файлов и/или папок"""
+    # Получаем списки файлов и папок для перемещения
+    file_paths = request.POST.getlist('files[]')
+    folder_paths = request.POST.getlist('folders[]')
+    destination_folder = request.POST.get('destination_folder', '').strip()
+
+    if not file_paths and not folder_paths:
+        return JsonResponse({'error': 'No items selected'}, status=400)
+
+    if not destination_folder and destination_folder != '':
+        return JsonResponse({'error': 'No destination folder specified'}, status=400)
+
+    s3_service = S3Service()
+
+    # Счетчики успешных операций
+    moved_files = 0
+    moved_folders = 0
+    errors = []
+
+    # Перемещаем файлы
+    for file_path in file_paths:
+        try:
+            s3_service.move_object(request.user, file_path, destination_folder, is_folder=False)
+            moved_files += 1
+        except Exception as e:
+            errors.append(f"Не удалось переместить файл {file_path}: {str(e)}")
+
+    # Перемещаем папки
+    for folder_path in folder_paths:
+        # Проверка, чтобы не перемещать папку в саму себя или свою подпапку
+        if destination_folder.startswith(folder_path) or destination_folder == folder_path:
+            errors.append(f"Невозможно переместить папку {folder_path} внутрь самой себя или в свою подпапку")
+            continue
+
+        try:
+            s3_service.move_object(request.user, folder_path, destination_folder, is_folder=True)
+            moved_folders += 1
+        except Exception as e:
+            errors.append(f"Не удалось переместить папку {folder_path}: {str(e)}")
+
+    response_data = {
+        'success': True,
+        'moved_files': moved_files,
+        'moved_folders': moved_folders,
+        'errors': errors
+    }
+
+    return JsonResponse(response_data)
+
+
 @staff_member_required
 def user_list(request):
     """Список пользователей (только для администраторов)"""
@@ -497,6 +611,7 @@ def user_permissions(request, user_id):
             can_read = form.cleaned_data['can_read']
             can_write = form.cleaned_data['can_write']
             can_delete = form.cleaned_data['can_delete']
+            can_move = form.cleaned_data['can_move']
 
             added_paths = []
             updated_paths = []
@@ -514,6 +629,7 @@ def user_permissions(request, user_id):
                     existing_perm.can_read = can_read
                     existing_perm.can_write = can_write
                     existing_perm.can_delete = can_delete
+                    existing_perm.can_move = can_move
                     existing_perm.save()
                     updated_paths.append(folder_path or '(корень)')
                 else:
@@ -523,7 +639,8 @@ def user_permissions(request, user_id):
                         folder_path=folder_path,
                         can_read=can_read,
                         can_write=can_write,
-                        can_delete=can_delete
+                        can_delete=can_delete,
+                        can_move=can_move
                     )
                     added_paths.append(folder_path or '(корень)')
 

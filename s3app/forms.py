@@ -70,7 +70,7 @@ class UserPermissionForm(forms.ModelForm):
 
     class Meta:
         model = UserPermission
-        fields = ['user', 'folder_path', 'can_read', 'can_write', 'can_delete']
+        fields = ['user', 'folder_path', 'can_read', 'can_write', 'can_delete', 'can_move']
         widgets = {
             'user': forms.HiddenInput(),
             'can_read': forms.CheckboxInput(attrs={
@@ -80,6 +80,9 @@ class UserPermissionForm(forms.ModelForm):
                 'class': 'form-check-input'
             }),
             'can_delete': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'can_move': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
             }),
         }
