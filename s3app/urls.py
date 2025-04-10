@@ -11,6 +11,7 @@ urlpatterns = [
     path('', RedirectView.as_view(pattern_name='s3app:login'), name='index'),  # Redirect root to login
     path('login/', views.login_view, name='login'),  # Explicit login path
     path('logout/', views.logout_view, name='logout'),
+    path('redirect/', views.redirect_after_login, name='redirect_after_login'),  # Новый маршрут для перенаправления после входа
 
     # --- Маршруты для проверки браузера ---
     path('browser-challenge/', views.browser_challenge_page_view, name='browser_challenge_page'),
@@ -59,4 +60,11 @@ urlpatterns = [
 
     # Новый маршрут для автозаполнения папок
     path('folders-autocomplete/', views.folders_autocomplete, name='folders_autocomplete'),
+
+    # Корзина (только для администраторов)
+    path('trash/', views.trash_view, name='trash'),
+    path('trash/restore/<int:item_id>/', views.restore_from_trash, name='restore_from_trash'),
+    path('trash/delete/<int:item_id>/', views.delete_from_trash, name='delete_from_trash'),
+    path('trash/empty/', views.empty_trash, name='empty_trash'),
+    path('trash/cleanup-expired/', views.cleanup_expired_trash, name='cleanup_expired_trash'),
 ]

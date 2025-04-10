@@ -12,7 +12,7 @@ from django import forms
 from .forms import LoginForm  # ... другие формы ...
 from .captcha import Captcha  # Импортируем класс Captcha
 
-from .models import UserPermission, S3ActionLog
+from .models import UserPermission, S3ActionLog, TrashItem
 from .forms import (
     LoginForm, CreateFolderForm, UploadFileForm,
     UserPermissionForm, UserCreationForm
@@ -30,6 +30,7 @@ from django.core.paginator import Paginator
 def login_view(request):
     """Авторизация пользователя с CAPTCHA"""
     if request.user.is_authenticated:
+        # Перенаправляем авторизованного пользователя на доступную ему папку
         return redirect('s3app:browser')
 
     captcha_data = None  # Инициализируем
@@ -51,9 +52,16 @@ def login_view(request):
                 user = authenticate(request, username=username, password=password)
                 if user is not None:
                     login(request, user)
-                    next_url = request.GET.get('next', 's3app:browser')
-                    messages.success(request, f'Добро пожаловать, {username}!')
-                    return redirect(next_url)
+                    # Получаем параметр next из URL или используем маршрут на redirect_after_login
+                    next_url = request.GET.get('next', 'none')
+
+                    # Если next не задан явно, определяем первую доступную папку
+                    if next_url == 'none':
+                        messages.success(request, f'Добро пожаловать, {username}!')
+                        return redirect('s3app:redirect_after_login')
+                    else:
+                        messages.success(request, f'Добро пожаловать, {username}!')
+                        return redirect(next_url)
                 else:
                     messages.error(request, 'Неверное имя пользователя или пароль.')
                     # Генерируем новую CAPTCHA для следующей попытки
@@ -152,6 +160,34 @@ def browser_challenge_validate_view(request):
 
 
 @login_required
+def redirect_after_login(request):
+    """Перенаправляет пользователя после входа на первую доступную ему папку"""
+    user = request.user
+
+    # Для суперпользователей сразу перенаправляем в корень
+    if user.is_superuser:
+        return redirect('s3app:browser')
+
+    # Получаем все права доступа пользователя
+    permissions = UserPermission.objects.filter(user=user, can_read=True).order_by('folder_path')
+
+    # Проверяем, есть ли права на чтение корневой директории
+    root_permission = permissions.filter(folder_path='').first()
+    if root_permission and root_permission.can_read:
+        return redirect('s3app:browser')
+
+    # Ищем первую доступную папку
+    for permission in permissions:
+        if permission.folder_path:  # Пропускаем пустой путь (корень)
+            # Перенаправляем на первую доступную папку
+            return redirect('s3app:browser', path=permission.folder_path)
+
+    # Если не нашли ни одной доступной папки, перенаправляем в корень с вероятным сообщением об ошибке
+    # S3Service в browser_view покажет сообщение об ошибке доступа
+    return redirect('s3app:browser')
+
+
+@login_required
 def browser_view(request, path=''):
     path = path.rstrip('/')
     s3_service = S3Service()
@@ -207,11 +243,10 @@ def browser_view(request, path=''):
 
     except PermissionDenied as e:
         messages.error(request, str(e))
-        # Redirect to root if permission denied on a subpath, unless already at root
+        # Если нет прав, перенаправляем на первую доступную директорию или оставляем на текущей странице
         if path:
-            # Decide where to redirect: root or parent? Parent might also be denied. Root is safer.
-            return redirect('s3app:browser')
-        # If denied at root, just show the error on the root page (handled by template)
+            # Редирект на страницу определения первой доступной директории
+            return redirect('s3app:redirect_after_login')
     except ClientError as e:
         error_message = f'Ошибка при взаимодействии с S3: {str(e)}'
         # Check for specific S3 errors if needed
@@ -690,6 +725,94 @@ def folders_autocomplete(request):
         print(f"Error in folders_autocomplete: {str(e)}")
         return JsonResponse([], safe=False)
 
+
+@staff_member_required
+def trash_view(request):
+    """Просмотр корзины (только для администраторов)"""
+    s3_service = S3Service()
+
+    # Получаем список элементов в корзине
+    trash_items = s3_service.list_trash_items()
+
+    # Пагинация
+    paginator = Paginator(trash_items, 20)  # 20 элементов на странице
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'page_obj': page_obj,
+        'trash_items': page_obj,  # Для совместимости с шаблоном
+    }
+
+    return render(request, 'trash.html', context)
+
+@staff_member_required
+def restore_from_trash(request, item_id):
+    """Восстановление элемента из корзины (только для администраторов)"""
+    s3_service = S3Service()
+
+    # Восстанавливаем элемент
+    result = s3_service.restore_from_trash(request.user, item_id)
+
+    if result['success']:
+        messages.success(request, result['message'])
+    else:
+        messages.error(request, result['message'])
+
+    return redirect('s3app:trash')
+
+@staff_member_required
+def delete_from_trash(request, item_id):
+    """Окончательное удаление элемента из корзины (только для администраторов)"""
+    s3_service = S3Service()
+
+    # Удаляем элемент из корзины
+    result = s3_service.delete_from_trash(item_id)
+
+    if result['success']:
+        messages.success(request, result['message'])
+    else:
+        messages.error(request, result['message'])
+
+    return redirect('s3app:trash')
+
+@staff_member_required
+def empty_trash(request):
+    """Полная очистка корзины (только для администраторов)"""
+    if request.method != 'POST':
+        messages.error(request, "Метод не поддерживается")
+        return redirect('s3app:trash')
+
+    s3_service = S3Service()
+
+    # Очищаем корзину
+    result = s3_service.empty_trash()
+
+    if result['success']:
+        messages.success(request, result['message'])
+    else:
+        messages.error(request, result['message'])
+
+    return redirect('s3app:trash')
+
+@staff_member_required
+def cleanup_expired_trash(request):
+    """Очистка элементов корзины с истекшим сроком хранения (только для администраторов)"""
+    if request.method != 'POST':
+        messages.error(request, "Метод не поддерживается")
+        return redirect('s3app:trash')
+
+    s3_service = S3Service()
+
+    # Очищаем элементы с истекшим сроком хранения
+    result = s3_service.cleanup_expired_trash()
+
+    if result['success']:
+        messages.success(request, result['message'])
+    else:
+        messages.error(request, result['message'])
+
+    return redirect('s3app:trash')
 
 def _get_breadcrumbs(path):
     """Вспомогательная функция для формирования хлебных крошек"""

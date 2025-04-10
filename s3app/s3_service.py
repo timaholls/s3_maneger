@@ -1,9 +1,12 @@
 import os
 import boto3
+import uuid
 from botocore.exceptions import ClientError
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
-from .models import UserPermission, S3ActionLog
+from django.utils import timezone
+import datetime
+from .models import UserPermission, S3ActionLog, TrashItem
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -212,7 +215,7 @@ class S3Service:
             raise
         except PermissionDenied as e: # Перехватываем PermissionDenied, чтобы залогировать его
             self.log_action(user, 'read', s3_prefix or '(root)', success=False, details=f"Permission denied: {str(e)}")
-            raise # Пробрасываем исключение дальше
+            raise
 
     def search_objects(self, user, prefix='', query='', max_results=200):
         """Рекурсивный поиск объектов (файлов И ПАПОК) по имени в указанной директории и поддиректориях."""
@@ -371,90 +374,8 @@ class S3Service:
             self.log_action(user, 'create_folder', s3_folder_key, success=False, details=str(e))
             raise
 
-    def delete_folder(self, user, folder_path):
-        """Удаление папки и всего её содержимого из S3"""
-        normalized_path = self._normalize_path(folder_path)
-
-        # Права проверяем на саму папку, которую удаляем
-        if not self.check_permission(user, normalized_path, 'delete'):
-            raise PermissionDenied("У вас нет прав для удаления этой папки")
-
-        # Добавляем '/' в конец, чтобы использовать как префикс
-        s3_prefix = normalized_path
-        if not s3_prefix.endswith('/'):
-            s3_prefix += '/'
-
-        try:
-            # Список объектов для удаления
-            objects_to_delete = []
-
-            # Используем пагинатор для получения ВСЕХ объектов с этим префиксом
-            paginator = self.s3_client.get_paginator('list_objects_v2')
-            pages = paginator.paginate(Bucket=self.bucket_name, Prefix=s3_prefix)
-
-            for page in pages:
-                if 'Contents' in page:
-                    for obj in page['Contents']:
-                        objects_to_delete.append({'Key': obj['Key']})
-
-            # Если объекты найдены, удаляем их пачкой (до 1000 за раз)
-            deleted_count = 0
-            if objects_to_delete:
-                 # Разделяем на чанки по 1000 (максимум для delete_objects)
-                for i in range(0, len(objects_to_delete), 1000):
-                    chunk = objects_to_delete[i:i + 1000]
-                    delete_response = self.s3_client.delete_objects(
-                        Bucket=self.bucket_name,
-                        Delete={'Objects': chunk}#, 'Quiet': True} # Quiet можно убрать для логов ошибок
-                    )
-                    deleted_count += len(chunk) # Считаем отправленные на удаление
-                    # Можно добавить проверку delete_response на наличие 'Errors'
-
-            # Логируем действие (даже если папка была пуста)
-            self.log_action(user, 'delete_folder', s3_prefix)
-
-            return {
-                'success': True,
-                'message': f"Папка '{normalized_path}' и ее содержимое ({deleted_count} объектов) успешно удалены",
-                'deleted_objects_count': deleted_count
-            }
-        except ClientError as e:
-            # Логируем неудачное действие
-            self.log_action(user, 'delete_folder', s3_prefix, success=False, details=str(e))
-            raise
-
-    def upload_file(self, user, file_obj, destination_path):
-        """Загрузка файла в S3"""
-        normalized_destination_path = self._normalize_path(destination_path)
-        # Получаем директорию, в которую загружается файл
-        folder_path = os.path.dirname(normalized_destination_path)
-
-        if not self.check_permission(user, folder_path, 'write'):
-            raise PermissionDenied("У вас нет прав для загрузки файлов в эту папку")
-
-        try:
-            # Загружаем файл в S3
-            self.s3_client.upload_fileobj(
-                file_obj,
-                self.bucket_name,
-                normalized_destination_path # Используем нормализованный путь
-            )
-
-            # Логируем действие
-            self.log_action(user, 'upload', normalized_destination_path)
-
-            return {
-                'success': True,
-                'message': f"Файл '{os.path.basename(normalized_destination_path)}' успешно загружен",
-                'path': normalized_destination_path
-            }
-        except ClientError as e:
-            # Логируем неудачное действие
-            self.log_action(user, 'upload', normalized_destination_path, success=False, details=str(e))
-            raise
-
     def delete_file(self, user, file_path):
-        """Удаление файла из S3"""
+        """Удаление файла из S3 (перемещение в корзину)"""
         normalized_file_path = self._normalize_path(file_path)
         # Получаем директорию, в которой находится файл
         folder_path = os.path.dirname(normalized_file_path)
@@ -468,10 +389,38 @@ class S3Service:
             raise PermissionDenied("У вас нет прав для удаления файлов из этой папки")
 
         try:
-            # Удаляем файл из S3
+            # Получаем информацию о файле перед удалением
+            file_info = self.s3_client.head_object(
+                Bucket=self.bucket_name,
+                Key=normalized_file_path
+            )
+            file_size = file_info.get('ContentLength', 0)
+
+            # Генерируем уникальный путь в корзине
+            trash_path = f"__trash/{uuid.uuid4().hex}/{os.path.basename(normalized_file_path)}"
+
+            # Копируем файл в корзину
+            self.s3_client.copy_object(
+                Bucket=self.bucket_name,
+                CopySource=f"{self.bucket_name}/{normalized_file_path}",
+                Key=trash_path
+            )
+
+            # Удаляем оригинальный файл
             self.s3_client.delete_object(
                 Bucket=self.bucket_name,
                 Key=normalized_file_path # Используем нормализованный путь
+            )
+
+            # Создаем запись в таблице корзины
+            expiration_date = timezone.now() + datetime.timedelta(days=30)
+            TrashItem.objects.create(
+                original_path=normalized_file_path,
+                trash_path=trash_path,
+                object_type='file',
+                deleted_by=user,
+                original_size=file_size,
+                expires_at=expiration_date
             )
 
             # Логируем действие
@@ -479,47 +428,373 @@ class S3Service:
 
             return {
                 'success': True,
-                'message': f"Файл '{os.path.basename(normalized_file_path)}' успешно удален"
+                'message': f"Файл '{os.path.basename(normalized_file_path)}' перемещен в корзину"
             }
         except ClientError as e:
             # Логируем неудачное действие
             self.log_action(user, 'delete', normalized_file_path, success=False, details=str(e))
             raise
 
-    def generate_download_url(self, user, file_path, expires_in=3600):
-        """Генерация временной ссылки для скачивания файла"""
-        normalized_file_path = self._normalize_path(file_path)
-        # Получаем директорию, в которой находится файл
-        folder_path = os.path.dirname(normalized_file_path)
+    def delete_folder(self, user, folder_path):
+        """Удаление папки и всего её содержимого из S3 (перемещение в корзину)"""
+        normalized_path = self._normalize_path(folder_path)
 
-        # Проверяем, не является ли путь папкой (оканчивается на '/')
-        if normalized_file_path.endswith('/'):
-             self.log_action(user, 'download', normalized_file_path, success=False, details="Attempted to download a folder.")
-             raise ValueError("Невозможно скачать папку, только файлы.")
+        # Права проверяем на саму папку, которую удаляем
+        if not self.check_permission(user, normalized_path, 'delete'):
+            raise PermissionDenied("У вас нет прав для удаления этой папки")
 
-        if not self.check_permission(user, folder_path, 'read'):
-            raise PermissionDenied("У вас нет прав для скачивания файлов из этой папки")
+        # Добавляем '/' в конец, чтобы использовать как префикс
+        s3_prefix = normalized_path
+        if not s3_prefix.endswith('/'):
+            s3_prefix += '/'
 
         try:
-            # Генерируем временную ссылку для скачивания
-            url = self.s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': self.bucket_name, 'Key': normalized_file_path},
-                ExpiresIn=expires_in
+            # Получаем общий размер всех объектов в папке
+            total_size = 0
+            objects_to_move = []
+
+            # Используем пагинатор для получения ВСЕХ объектов с этим префиксом
+            paginator = self.s3_client.get_paginator('list_objects_v2')
+            pages = paginator.paginate(Bucket=self.bucket_name, Prefix=s3_prefix)
+
+            for page in pages:
+                if 'Contents' in page:
+                    for obj in page['Contents']:
+                        objects_to_move.append(obj)
+                        total_size += obj.get('Size', 0)
+
+            # Генерируем уникальный идентификатор для корзины
+            trash_id = uuid.uuid4().hex
+
+            # Перемещаем все объекты в корзину и удаляем оригиналы
+            for obj in objects_to_move:
+                original_key = obj['Key']
+                relative_path = original_key[len(s3_prefix):] if len(s3_prefix) > 0 and original_key.startswith(s3_prefix) else original_key
+                trash_key = f"__trash/{trash_id}/{normalized_path}/{relative_path}"
+
+                # Копируем объект в корзину
+                self.s3_client.copy_object(
+                    Bucket=self.bucket_name,
+                    CopySource=f"{self.bucket_name}/{original_key}",
+                    Key=trash_key
+                )
+
+                # Удаляем оригинальный объект
+                self.s3_client.delete_object(
+                    Bucket=self.bucket_name,
+                    Key=original_key
+                )
+
+            # Создаем запись в таблице корзины
+            expiration_date = timezone.now() + datetime.timedelta(days=30)
+            trash_prefix = f"__trash/{trash_id}/{normalized_path}/"
+            TrashItem.objects.create(
+                original_path=normalized_path,
+                trash_path=trash_prefix,
+                object_type='folder',
+                deleted_by=user,
+                original_size=total_size,
+                expires_at=expiration_date
             )
 
             # Логируем действие
-            self.log_action(user, 'download', normalized_file_path)
+            self.log_action(user, 'delete', s3_prefix)
 
             return {
                 'success': True,
-                'url': url,
-                'expires_in': expires_in
+                'message': f"Папка '{normalized_path}' и ее содержимое ({len(objects_to_move)} объектов) перемещены в корзину",
+                'deleted_objects_count': len(objects_to_move)
             }
         except ClientError as e:
             # Логируем неудачное действие
-            self.log_action(user, 'download', normalized_file_path, success=False, details=str(e))
+            self.log_action(user, 'delete', s3_prefix, success=False, details=str(e))
             raise
+
+    def list_trash_items(self):
+        """Получение списка элементов в корзине"""
+        try:
+            # Получаем записи из БД
+            trash_items = TrashItem.objects.all().order_by('-deleted_at')
+            return trash_items
+        except Exception as e:
+            print(f"Error listing trash items: {str(e)}")
+            return []
+
+    def restore_from_trash(self, user, trash_item_id):
+        """Восстановление элемента из корзины"""
+        try:
+            # Получаем запись из БД
+            trash_item = TrashItem.objects.get(id=trash_item_id)
+
+            if trash_item.object_type == 'file':
+                # Восстановление файла
+                original_path = trash_item.original_path
+                trash_path = trash_item.trash_path
+
+                # Проверяем, существует ли уже файл с таким путем
+                try:
+                    self.s3_client.head_object(
+                        Bucket=self.bucket_name,
+                        Key=original_path
+                    )
+                    # Если файл уже существует, добавляем к имени '_restored'
+                    filename, ext = os.path.splitext(original_path)
+                    original_path = f"{filename}_restored{ext}"
+                except ClientError as e:
+                    if e.response['Error']['Code'] != '404':
+                        raise
+
+                # Копируем объект из корзины в исходное расположение
+                self.s3_client.copy_object(
+                    Bucket=self.bucket_name,
+                    CopySource=f"{self.bucket_name}/{trash_path}",
+                    Key=original_path
+                )
+
+                # Удаляем объект из корзины
+                self.s3_client.delete_object(
+                    Bucket=self.bucket_name,
+                    Key=trash_path
+                )
+
+                # Логируем действие
+                self.log_action(user, 'restore', original_path)
+
+                # Удаляем запись из БД
+                trash_item.delete()
+
+                return {
+                    'success': True,
+                    'message': f"Файл '{os.path.basename(original_path)}' успешно восстановлен",
+                    'restored_path': original_path
+                }
+
+            elif trash_item.object_type == 'folder':
+                # Восстановление папки
+                original_path = trash_item.original_path
+                trash_path = trash_item.trash_path.rstrip('/')
+
+                # Получаем все объекты в корзине с этим префиксом
+                paginator = self.s3_client.get_paginator('list_objects_v2')
+                pages = paginator.paginate(Bucket=self.bucket_name, Prefix=trash_path)
+
+                restored_count = 0
+                for page in pages:
+                    if 'Contents' in page:
+                        for obj in page['Contents']:
+                            trash_key = obj['Key']
+
+                            # Пропускаем сам префикс
+                            if trash_key == trash_path:
+                                continue
+
+                            # Определяем исходный путь
+                            relative_path = trash_key[len(trash_path)+1:] if trash_key.startswith(trash_path+'/') else ''
+                            target_key = f"{original_path}/{relative_path}" if original_path else relative_path
+
+                            # Копируем объект из корзины в исходное расположение
+                            self.s3_client.copy_object(
+                                Bucket=self.bucket_name,
+                                CopySource=f"{self.bucket_name}/{trash_key}",
+                                Key=target_key
+                            )
+
+                            # Удаляем объект из корзины
+                            self.s3_client.delete_object(
+                                Bucket=self.bucket_name,
+                                Key=trash_key
+                            )
+
+                            restored_count += 1
+
+                # Логируем действие
+                self.log_action(user, 'restore', original_path)
+
+                # Удаляем запись из БД
+                trash_item.delete()
+
+                return {
+                    'success': True,
+                    'message': f"Папка '{original_path}' и ее содержимое ({restored_count} объектов) успешно восстановлены",
+                    'restored_path': original_path,
+                    'restored_count': restored_count
+                }
+
+            else:
+                return {
+                    'success': False,
+                    'message': f"Неизвестный тип объекта: {trash_item.object_type}"
+                }
+
+        except TrashItem.DoesNotExist:
+            return {
+                'success': False,
+                'message': "Элемент не найден в корзине"
+            }
+        except ClientError as e:
+            return {
+                'success': False,
+                'message': f"Ошибка восстановления: {str(e)}"
+            }
+
+    def delete_from_trash(self, trash_item_id):
+        """Окончательное удаление элемента из корзины"""
+        try:
+            # Получаем запись из БД
+            trash_item = TrashItem.objects.get(id=trash_item_id)
+            trash_path = trash_item.trash_path
+
+            if trash_item.object_type == 'file':
+                # Удаляем файл из корзины
+                self.s3_client.delete_object(
+                    Bucket=self.bucket_name,
+                    Key=trash_path
+                )
+
+                # Удаляем запись из БД
+                trash_item.delete()
+
+                return {
+                    'success': True,
+                    'message': f"Файл '{os.path.basename(trash_item.original_path)}' окончательно удален из корзины"
+                }
+
+            elif trash_item.object_type == 'folder':
+                # Удаляем все объекты с этим префиксом
+                paginator = self.s3_client.get_paginator('list_objects_v2')
+                pages = paginator.paginate(Bucket=self.bucket_name, Prefix=trash_path)
+
+                deleted_count = 0
+                for page in pages:
+                    if 'Contents' in page:
+                        for obj in page['Contents']:
+                            self.s3_client.delete_object(
+                                Bucket=self.bucket_name,
+                                Key=obj['Key']
+                            )
+                            deleted_count += 1
+
+                # Удаляем запись из БД
+                trash_item.delete()
+
+                return {
+                    'success': True,
+                    'message': f"Папка '{trash_item.original_path}' и ее содержимое ({deleted_count} объектов) окончательно удалены из корзины",
+                    'deleted_count': deleted_count
+                }
+
+            else:
+                return {
+                    'success': False,
+                    'message': f"Неизвестный тип объекта: {trash_item.object_type}"
+                }
+
+        except TrashItem.DoesNotExist:
+            return {
+                'success': False,
+                'message': "Элемент не найден в корзине"
+            }
+        except ClientError as e:
+            return {
+                'success': False,
+                'message': f"Ошибка удаления: {str(e)}"
+            }
+
+    def empty_trash(self):
+        """Полная очистка корзины"""
+        try:
+            # Получаем все записи из корзины
+            trash_items = TrashItem.objects.all()
+            deleted_count = 0
+
+            for item in trash_items:
+                trash_path = item.trash_path
+
+                if item.object_type == 'file':
+                    # Удаляем файл из корзины
+                    self.s3_client.delete_object(
+                        Bucket=self.bucket_name,
+                        Key=trash_path
+                    )
+                    deleted_count += 1
+
+                elif item.object_type == 'folder':
+                    # Удаляем все объекты с этим префиксом
+                    paginator = self.s3_client.get_paginator('list_objects_v2')
+                    pages = paginator.paginate(Bucket=self.bucket_name, Prefix=trash_path)
+
+                    for page in pages:
+                        if 'Contents' in page:
+                            for obj in page['Contents']:
+                                self.s3_client.delete_object(
+                                    Bucket=self.bucket_name,
+                                    Key=obj['Key']
+                                )
+                                deleted_count += 1
+
+            # Удаляем все записи из БД
+            items_count = trash_items.count()
+            trash_items.delete()
+
+            return {
+                'success': True,
+                'message': f"Корзина очищена. Удалено {items_count} элементов ({deleted_count} объектов).",
+                'deleted_count': deleted_count
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f"Ошибка очистки корзины: {str(e)}"
+            }
+
+    def cleanup_expired_trash(self):
+        """Очистка элементов корзины с истекшим сроком хранения"""
+        try:
+            # Получаем элементы с истекшим сроком хранения
+            expired_items = TrashItem.get_expired_items()
+            deleted_count = 0
+
+            for item in expired_items:
+                trash_path = item.trash_path
+
+                if item.object_type == 'file':
+                    # Удаляем файл из корзины
+                    self.s3_client.delete_object(
+                        Bucket=self.bucket_name,
+                        Key=trash_path
+                    )
+                    deleted_count += 1
+
+                elif item.object_type == 'folder':
+                    # Удаляем все объекты с этим префиксом
+                    paginator = self.s3_client.get_paginator('list_objects_v2')
+                    pages = paginator.paginate(Bucket=self.bucket_name, Prefix=trash_path)
+
+                    for page in pages:
+                        if 'Contents' in page:
+                            for obj in page['Contents']:
+                                self.s3_client.delete_object(
+                                    Bucket=self.bucket_name,
+                                    Key=obj['Key']
+                                )
+                                deleted_count += 1
+
+            # Удаляем записи из БД
+            items_count = expired_items.count()
+            expired_items.delete()
+
+            return {
+                'success': True,
+                'message': f"Очищены элементы с истекшим сроком хранения: {items_count} элементов ({deleted_count} объектов).",
+                'deleted_count': deleted_count
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f"Ошибка очистки элементов с истекшим сроком хранения: {str(e)}"
+            }
 
     def _normalize_path(self, path):
         """Нормализация пути к объекту/директории.

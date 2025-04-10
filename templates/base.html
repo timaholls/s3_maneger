@@ -48,6 +48,11 @@
                             <i class="fas fa-list me-1"></i> Журнал действий
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'trash' %}active{% endif %}" href="{% url 's3app:trash' %}">
+                            <i class="fas fa-trash-alt me-1"></i> Корзина
+                        </a>
+                    </li>
                     {% endif %}
                     {% endif %}
                      <!-- Theme toggler placeholder (JS adds the actual button) -->

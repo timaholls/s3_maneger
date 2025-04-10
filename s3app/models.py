@@ -1,79 +1,111 @@
 from django.db import models
 from django.contrib.auth.models import User
-
+from django.utils import timezone
+import datetime
 
 class UserPermission(models.Model):
-    """Модель для хранения прав доступа пользователей к папкам в S3"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='s3_permissions',
-                           verbose_name='Пользователь')
-    folder_path = models.CharField(max_length=255, verbose_name='Путь к папке в S3')
-    can_read = models.BooleanField(default=True, verbose_name='Может читать')
-    can_write = models.BooleanField(default=False, verbose_name='Может записывать')
-    can_delete = models.BooleanField(default=False, verbose_name='Может удалять')
+    """Модель для хранения прав доступа пользователей к директориям S3"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Пользователь")
+    folder_path = models.CharField(max_length=1024, blank=True, default='', verbose_name="Путь к папке")
+    can_read = models.BooleanField(default=True, verbose_name="Чтение")
+    can_write = models.BooleanField(default=False, verbose_name="Запись")
+    can_delete = models.BooleanField(default=False, verbose_name="Удаление")
 
     class Meta:
+        verbose_name = "Право доступа"
+        verbose_name_plural = "Права доступа"
+        # Уникальный ключ: пользователь + путь к папке
         unique_together = ('user', 'folder_path')
-        verbose_name = 'Право доступа'
-        verbose_name_plural = 'Права доступа'
 
     def __str__(self):
-        return f"{self.user.username} - {self.folder_path}"
+        path_display = self.folder_path if self.folder_path else '/ (корень)'
+        permissions = []
+        if self.can_read:
+            permissions.append('Чтение')
+        if self.can_write:
+            permissions.append('Запись')
+        if self.can_delete:
+            permissions.append('Удаление')
+        return f"{self.user.username} - {path_display} - {', '.join(permissions)}"
 
 
 class S3ActionLog(models.Model):
-    """Модель для хранения логов действий пользователей в S3"""
-    ACTION_TYPES = (
-        ('read', 'Чтение'),
-        ('upload', 'Загрузка'),
-        ('download', 'Скачивание'),
+    """Модель для логирования действий пользователей с S3"""
+    ACTION_TYPES = [
+        ('read', 'Чтение/Просмотр'),
+        ('write', 'Запись/Загрузка'),
         ('delete', 'Удаление'),
         ('create_folder', 'Создание папки'),
-        ('delete_folder', 'Удаление папки'),
-    )
+        ('list', 'Просмотр содержимого'),
+        ('download', 'Скачивание'),
+        ('search', 'Поиск'),
+        ('upload', 'Загрузка файла'),
+        ('restore', 'Восстановление из корзины'),
+    ]
 
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='s3_logs',
-                            verbose_name='Пользователь')
-    action_type = models.CharField(max_length=20, choices=ACTION_TYPES, verbose_name='Тип действия')
-    object_path = models.CharField(max_length=255, verbose_name='Путь к объекту в S3')
-    timestamp = models.DateTimeField(auto_now_add=True, verbose_name='Время действия')
-    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name='IP адрес')
-    success = models.BooleanField(default=True, verbose_name='Успешно')
-    details = models.TextField(blank=True, null=True, verbose_name='Детали')
-
-    class Meta:
-        verbose_name = 'Лог действия'
-        verbose_name_plural = 'Логи действий'
-        ordering = ['-timestamp']
-
-    def __str__(self):
-        return f"{self.user.username if self.user else 'Аноним'} - {self.get_action_type_display()} - {self.object_path}"
-
-
-class IPBlock(models.Model):
-    """Модель для хранения информации о заблокированных IP-адресах"""
-    ip_address = models.GenericIPAddressField(verbose_name="IP адрес")
-    blocked_at = models.DateTimeField(verbose_name="Время блокировки", auto_now_add=True)
-    expires_at = models.DateTimeField(verbose_name="Время окончания блокировки")
-    reason = models.CharField(verbose_name="Причина блокировки", max_length=255)
-    is_active = models.BooleanField(verbose_name="Активна", default=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Пользователь")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Время действия")
+    action = models.CharField(max_length=20, choices=ACTION_TYPES, verbose_name="Тип действия")
+    path = models.CharField(max_length=1024, blank=True, default='', verbose_name="Путь объекта")
+    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name="IP адрес")
+    success = models.BooleanField(default=True, verbose_name="Успешно")
+    details = models.TextField(blank=True, null=True, verbose_name="Детали")
 
     class Meta:
-        verbose_name = "Блокировка IP"
-        verbose_name_plural = "Блокировки IP"
-        ordering = ['-blocked_at']
+        verbose_name = "Лог действия"
+        verbose_name_plural = "Логи действий"
+        ordering = ['-timestamp']  # Сортировка по убыванию времени
 
     def __str__(self):
-        return f"{self.ip_address} (до {self.expires_at})"
+        return f"{self.timestamp} - {self.user} - {self.get_action_display()} - {self.path}"
 
-    @property
+
+class TrashItem(models.Model):
+    """Модель для хранения информации об удаленных объектах в корзине"""
+    OBJECT_TYPES = [
+        ('file', 'Файл'),
+        ('folder', 'Папка'),
+    ]
+
+    original_path = models.CharField(max_length=1024, verbose_name="Исходный путь")
+    trash_path = models.CharField(max_length=1024, verbose_name="Путь в корзине")
+    object_type = models.CharField(max_length=10, choices=OBJECT_TYPES, verbose_name="Тип объекта")
+    deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Удалено пользователем")
+    deleted_at = models.DateTimeField(auto_now_add=True, verbose_name="Время удаления")
+    original_size = models.BigIntegerField(default=0, verbose_name="Размер объекта")
+    expires_at = models.DateTimeField(verbose_name="Срок хранения до")
+
+    class Meta:
+        verbose_name = "Элемент корзины"
+        verbose_name_plural = "Элементы корзины"
+        ordering = ['-deleted_at']  # Сортировка по убыванию времени удаления
+
+    def __str__(self):
+        return f"{self.get_object_type_display()} - {self.original_path} (удалено {self.deleted_at})"
+
     def is_expired(self):
-        """Проверяет, истекла ли блокировка"""
-        from django.utils import timezone
-        return self.expires_at <= timezone.now()
+        """Проверяет, истек ли срок хранения объекта в корзине"""
+        return timezone.now() > self.expires_at
 
-    def save(self, *args, **kwargs):
-        """Переопределение метода save для обновления is_active при истечении срока"""
-        from django.utils import timezone
-        if self.expires_at <= timezone.now():
-            self.is_active = False
-        super().save(*args, **kwargs)
+    def days_left(self):
+        """Возвращает количество дней до истечения срока хранения"""
+        if self.is_expired():
+            return 0
+        delta = self.expires_at - timezone.now()
+        return max(0, delta.days)
+
+    @classmethod
+    def get_expired_items(cls):
+        """Возвращает список элементов с истекшим сроком хранения"""
+        return cls.objects.filter(expires_at__lt=timezone.now())
+
+    @classmethod
+    def cleanup_expired(cls):
+        """Удаляет из БД записи с истекшим сроком хранения"""
+        expired_items = cls.get_expired_items()
+        result = {
+            'count': expired_items.count(),
+            'items': list(expired_items.values_list('trash_path', flat=True))
+        }
+        expired_items.delete()
+        return result
