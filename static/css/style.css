@@ -304,7 +304,6 @@ input[type="file"].form-control {
     height: var(--control-height);
     padding: 0;
     font-size: 0.9rem; /* Slightly smaller icon size */
-    flex: 0 0 auto; /* Prevent shrinking/growing */
 }
 .action-btn.btn-sm { /* This applies to multi-action panel, not usually table */
     width: auto; /* Let sm buttons size naturally */
@@ -376,6 +375,53 @@ input[type="file"].form-control {
     text-overflow: ellipsis;
     vertical-align: middle;
     max-width: 100%; /* Ensure text truncates within the link */
+}
+
+/* Стили для кликабельных файлов */
+.js-file-item {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    margin: -0.5rem;
+}
+
+.js-file-item:hover {
+    background-color: var(--table-hover);
+}
+
+.js-file-item .file-name-text {
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.js-file-item:hover .file-name-text {
+    color: var(--primary-color);
+}
+
+/* Стили для имен файлов */
+.file-name-link {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Стили для особых файлов */
+.js-file-item[data-is-image="true"] {
+    position: relative;
+}
+
+.js-file-item[data-is-image="true"]::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: transparent;
+    z-index: 1;
 }
 
 /* Breadcrumbs */
@@ -550,7 +596,6 @@ footer {
     .file-browser-table td {
         padding: 0.6rem 0; /* Vertical padding, horizontal handled by flex */
         display: flex;
-        /* >>> CORRECTED: Use space-between for the TD container <<< */
         justify-content: space-between; /* Label left, Value right */
         align-items: center;
         border: none;
@@ -951,7 +996,7 @@ footer {
      color: inherit; /* Inherit color */
  }
 
- /* ============================================= */
+/* ============================================= */
 /* == User Permissions Table Mobile Styles == */
 /* ============================================= */
 .permissions-table thead {
@@ -1059,7 +1104,7 @@ footer {
     padding: 1.5rem;
     min-height: auto;
     justify-content: center;
-}
+ }
  .permissions-table tr td[colspan="5"]::before {
      display: none; /* No label needed */
  }
@@ -1072,3 +1117,72 @@ footer {
      position: static !important; /* Remove sticky positioning on mobile */
      top: auto !important;
  }
+
+/* Контейнер для превью изображений */
+.js-preview-container {
+    display: inline-block;
+    position: relative;
+    z-index: 10;
+}
+
+/* Стили для предпросмотра изображений */
+.image-preview-thumbnail {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-tertiary);
+    cursor: pointer; /* Указатель при наведении */
+    position: relative; /* Для позиционирования псевдоэлемента */
+    z-index: 10; /* Выше, чем у родительской ссылки */
+}
+
+.image-preview-thumbnail::after {
+    content: '🔍'; /* Unicode символ лупы */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    font-size: 16px;
+    color: #fff;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.7);
+    pointer-events: none; /* Чтобы не мешал кликам */
+    z-index: 11; /* Выше, чем превью */
+}
+
+.image-preview-thumbnail:hover::after {
+    opacity: 1;
+}
+
+.image-preview-thumbnail img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: cover;
+    transition: transform 0.2s ease, filter 0.2s ease;
+    pointer-events: none; /* Предотвращает перехват кликов изображением */
+}
+
+/* Анимация для превью изображений при наведении */
+.image-preview-thumbnail:hover img {
+    transform: scale(1.1);
+    filter: brightness(0.8); /* Затемнение при наведении для выделения лупы */
+}
+
+/* Стиль для модального окна просмотра изображений */
+#imageViewModal .modal-body {
+    padding: 0;
+    background-color: var(--bg-tertiary);
+    text-align: center;
+}
+
+#imageViewModal .modal-body img {
+    max-height: 80vh;
+    max-width: 100%;
+    margin: 0 auto;
+    display: block;
+}

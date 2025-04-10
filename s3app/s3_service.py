@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 import datetime
+import mimetypes
 from .models import UserPermission, S3ActionLog, TrashItem
 from dotenv import load_dotenv
 
@@ -184,7 +185,7 @@ class S3Service:
                         if not user.is_superuser and ('__trash/' in item_key or item_key.startswith('__trash/')):
                             continue
 
-                        # Извлекаем имя файла/объекта относительно текущего префикса
+                        # Извлекаем имя файла/объекта относительно текущей папки
                         relative_name = item_key
                         if s3_prefix:
                              # Убедимся, что заменяем только в начале строки
@@ -222,12 +223,21 @@ class S3Service:
                             continue # Пропускаем добавление в files
 
                         # Если это не папка, добавляем в файлы
-                        result['files'].append({
-                            'name': relative_name, # Имя относительно текущей папки
-                            'path': item_key,      # Полный путь (Key) от корня бакета
+                        file_item = {
+                            'name': relative_name,  # Имя относительно текущей папки
+                            'path': item_key,       # Полный путь (Key) от корня бакета
                             'size': item['Size'],
                             'last_modified': item['LastModified']
-                        })
+                        }
+
+                        # Проверяем, является ли файл изображением
+                        if self._is_image_file(relative_name):
+                            file_item['is_image'] = True
+                            file_item['preview_url'] = self.get_presigned_url(item_key)
+                        else:
+                            file_item['is_image'] = False
+
+                        result['files'].append(file_item)
 
             # Логируем успешное действие после получения всех данных
             # Move this inside try/except to continue even if logging fails
@@ -254,31 +264,25 @@ class S3Service:
                 print(f"Error in logging permission denied: {str(log_error)}")
             raise
 
-    def search_objects(self, user, prefix='', query='', max_results=200):
-        """Рекурсивный поиск объектов (файлов И ПАПОК) по имени в указанной директории и поддиректориях."""
+    def search_objects(self, user, prefix='', query='', max_results=100):
+        """Поиск объектов в S3 хранилище"""
+        # Проверка прав доступа
         normalized_prefix = self._normalize_path(prefix)
-        query_lower = query.lower().strip()
-
-        if not query_lower:
-            return []  # Return empty if query is empty
-
-        # Check permission for the starting path of the search
         if not self.check_permission(user, normalized_prefix, 'read'):
-            # Log the failed attempt due to permissions before raising
-            self.log_action(user, 'search', f"{normalized_prefix} (query: {query})", success=False,
-                            details="Permission denied to read search path")
-            raise PermissionDenied(f"У вас нет прав для поиска в папке '{normalized_prefix or 'Корень'}'")
+            raise PermissionDenied("У вас нет прав для просмотра содержимого этой папки")
 
         s3_prefix = normalized_prefix
         if s3_prefix and not s3_prefix.endswith('/'):
             s3_prefix += '/'
 
-        found_items = []
-        scanned_count = 0
+        # Приводим запрос к нижнему регистру для регистронезависимого поиска
+        query = query.lower()
+
+        results = []
+        folders_found = set()  # Для отслеживания уникальных папок
 
         try:
             paginator = self.s3_client.get_paginator('list_objects_v2')
-            # No Delimiter specified for recursive listing
             pages = paginator.paginate(
                 Bucket=self.bucket_name,
                 Prefix=s3_prefix
@@ -287,77 +291,73 @@ class S3Service:
             for page in pages:
                 if 'Contents' in page:
                     for item in page['Contents']:
-                        scanned_count += 1
-                        item_key = item['Key']
+                        key = item['Key']
 
-                        # Skip the containing folder object itself (prefix object)
-                        if item_key == s3_prefix:
+                        # Пропускаем объекты в корзине, если пользователь не суперпользователь
+                        if not user.is_superuser and ('__trash/' in key or key.startswith('__trash/')):
                             continue
 
-                        # Скрываем объекты из папки __trash для обычных пользователей
-                        if not user.is_superuser and ('__trash/' in item_key or item_key.startswith('__trash/')):
-                            continue
+                        # Построение относительного пути для отображения
+                        display_path = key
+                        if s3_prefix and key.startswith(s3_prefix):
+                            display_path = key[len(s3_prefix):]
 
-                        # Determine if it's a folder (ends with / and usually size 0)
-                        # We primarily rely on the trailing slash convention
-                        is_folder = item_key.endswith('/')
+                        # Проверяем, не "пустая" ли это директория
+                        is_folder = key.endswith('/') and item['Size'] == 0
 
-                        # Extract the name part for matching
-                        # For folders 'path/to/folder/', basename needs the key without trailing slash
-                        item_name = os.path.basename(item_key.rstrip('/'))
-
-                        # Skip if somehow the name is empty after stripping/basename
-                        if not item_name:
-                            continue
-
-                        # Скрываем директорию __trash для обычных пользователей
-                        if not user.is_superuser and item_name == '__trash':
-                            continue
-
-                        # Check if the item_name (file or folder) contains the query
-                        if query_lower in item_name.lower():
-                            # Prepare item data
-                            item_data = {
-                                'name': item_name,           # Just the name part
-                                'path': item_key,           # Full S3 key (needed for actions)
-                                'display_path': item_key,   # Path to show the user (full key)
-                                'is_folder': is_folder,     # Flag to distinguish type
-                            }
-
-                            # Add file-specific or folder-specific data
+                        # Регистронезависимый поиск в имени файла или папки
+                        if query in key.lower():
+                            # Если это папка, добавляем ее в результаты
                             if is_folder:
-                                item_data['size'] = None # Folders don't have relevant size
-                                # Folders (objects ending in /) do have LastModified,
-                                # but it might be confusing, set to None or keep item['LastModified']
-                                item_data['last_modified'] = None # item['LastModified']
+                                # Проверяем, не добавили ли мы уже эту папку
+                                if key not in folders_found:
+                                    folders_found.add(key)
+                                    results.append({
+                                        'path': key,  # Полный путь включая слеш
+                                        'display_path': display_path,
+                                        'is_folder': True,
+                                        'last_modified': item.get('LastModified')
+                                    })
                             else:
-                                item_data['size'] = item['Size']
-                                item_data['last_modified'] = item['LastModified']
+                                # Инициализируем элемент файла
+                                file_item = {
+                                    'path': key,
+                                    'display_path': display_path,
+                                    'is_folder': False,
+                                    'size': item['Size'],
+                                    'last_modified': item.get('LastModified')
+                                }
 
-                            found_items.append(item_data)
+                                # Проверяем, является ли файл изображением
+                                if self._is_image_file(display_path):
+                                    file_item['is_image'] = True
+                                    file_item['preview_url'] = self.get_presigned_url(key)
+                                else:
+                                    file_item['is_image'] = False
 
-                            # Stop if we have enough results
-                            if len(found_items) >= max_results:
-                                break # Stop processing this page
-                # Stop iterating through pages if we hit the limit
-                if len(found_items) >= max_results:
+                                results.append(file_item)
+
+                            # Если достигли максимального количества результатов, прерываем поиск
+                            if len(results) >= max_results:
+                                break
+
+                # Если достигли максимального количества результатов, прерываем поиск по страницам
+                if len(results) >= max_results:
                     break
 
-            # Log the search action
-            self.log_action(user, 'search', f"{s3_prefix or '(root)'} (query: {query})", success=True,
-                            details=f"Found {len(found_items)} items (scanned approx {scanned_count})")
+            # Логируем успешный поиск
+            log_details = f"Search query: '{query}', found {len(results)} results"
+            self.log_action(user, 'search', s3_prefix or '(root)', details=log_details)
 
-            # Sort results by full path for consistency
-            found_items.sort(key=lambda x: x['path'])
-
-            return found_items
+            return results
 
         except ClientError as e:
-            self.log_action(user, 'search', f"{s3_prefix or '(root)'} (query: {query})", success=False, details=str(e))
-            raise  # Re-raise the exception
-        except PermissionDenied as e:  # Should be caught earlier, but just in case
-            self.log_action(user, 'search', f"{s3_prefix or '(root)'} (query: {query})", success=False,
-                            details=f"Permission denied during search: {str(e)}")
+            # Логируем ошибку поиска
+            self.log_action(user, 'search', s3_prefix or '(root)', success=False, details=str(e))
+            raise
+        except PermissionDenied as e:
+            # Логируем ошибку доступа при поиске
+            self.log_action(user, 'search', s3_prefix or '(root)', success=False, details=str(e))
             raise
 
     def create_folder(self, user, folder_path):
@@ -1027,4 +1027,78 @@ class S3Service:
         except ClientError as e:
             # Логируем неудачное действие
             self.log_action(user, 'move', f"{normalized_source_path} → {destination_path}", success=False, details=str(e))
+            raise
+
+    def _is_image_file(self, file_name):
+        """Проверяет, является ли файл изображением по его расширению"""
+        # Список распространенных расширений изображений
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.tiff', '.ico']
+        _, ext = os.path.splitext(file_name.lower())
+        return ext in image_extensions
+
+    def get_presigned_url(self, object_key, expires_in=300):
+        """Генерирует presigned URL для объекта в S3 хранилище"""
+        try:
+            url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': self.bucket_name,
+                    'Key': object_key
+                },
+                ExpiresIn=expires_in
+            )
+            return url
+        except Exception as e:
+            print(f"Error generating presigned URL: {str(e)}")
+            return None
+
+    def generate_download_url(self, user, object_key, expires_in=3600):
+        """Генерирует временную ссылку для скачивания файла, проверяя права доступа
+
+        Args:
+            user: пользователь, запрашивающий доступ
+            object_key: путь к файлу в S3
+            expires_in: время жизни ссылки в секундах (по умолчанию 1 час)
+
+        Returns:
+            dict: словарь с URL для скачивания и метаданными файла
+
+        Raises:
+            PermissionDenied: если у пользователя нет прав на скачивание файла
+            ClientError: при ошибке S3
+        """
+        # Получаем директорию, в которой находится файл
+        folder_path = "/".join(object_key.split('/')[:-1])
+
+        # Проверяем права на чтение
+        if not self.check_permission(user, folder_path, 'read'):
+            raise PermissionDenied(f"У вас нет прав для скачивания файлов из директории '{folder_path}'")
+
+        try:
+            # Получаем информацию о файле
+            response = self.s3_client.head_object(
+                Bucket=self.bucket_name,
+                Key=object_key
+            )
+
+            # Генерируем временную ссылку
+            url = self.get_presigned_url(object_key, expires_in=expires_in)
+
+            if not url:
+                raise ClientError({"Error": {"Message": "Не удалось создать ссылку для скачивания"}}, "GetObject")
+
+            # Логируем действие
+            self.log_action(user, 'download', object_key)
+
+            # Возвращаем ссылку и метаданные
+            return {
+                'url': url,
+                'file_name': object_key.split('/')[-1],
+                'content_type': response.get('ContentType', 'application/octet-stream'),
+                'content_length': response.get('ContentLength', 0)
+            }
+
+        except ClientError as e:
+            # Логируем ошибку
+            self.log_action(user, 'download', object_key, success=False, details=str(e))
             raise

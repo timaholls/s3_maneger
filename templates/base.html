@@ -152,6 +152,29 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Modal for Image Viewing -->
+    <div class="modal fade" id="imageViewModal" tabindex="-1" aria-labelledby="imageViewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageViewModalLabel">Просмотр изображения</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="modalImage" src="" alt="Image" class="img-fluid">
+                </div>
+                <div class="modal-footer">
+                    <a id="downloadImageBtn" href="#" class="btn btn-primary" download>
+                        <i class="fas fa-download me-1"></i> Скачать
+                    </a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="py-3 mt-auto">
         <div class="container text-center">
