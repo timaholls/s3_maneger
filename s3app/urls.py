@@ -72,4 +72,11 @@ urlpatterns = [
     path('trash/delete/<int:item_id>/', views.delete_from_trash, name='delete_from_trash'),
     path('trash/empty/', views.empty_trash, name='empty_trash'),
     path('trash/cleanup-expired/', views.cleanup_expired_trash, name='cleanup_expired_trash'),
+
+    # Документы для подписания
+    path('documents-for-signature/', views.documents_for_signature_view, name='documents_for_signature'),
+    path('documents/view/<int:document_id>/', views.view_document, name='view_document'),
+    path('documents/sign/<int:document_id>/', views.sign_document, name='sign_document'),
+    path('documents/create/', views.create_document_for_signature, name='create_document_for_signature'),
+    path('documents/list-templates/', views.list_document_templates, name='list_document_templates'),
 ]

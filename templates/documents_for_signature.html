@@ -2,8 +2,16 @@
 
 {% block title %}Документы для подписи - S3 Менеджер{% endblock %}
 
+{% block extra_head %}
+<script src="/static/js/document_signature.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
+    <div id="alerts-container">
+        <!-- Здесь будут отображаться динамические уведомления -->
+    </div>
+
     <div class="row">
         <div class="col-12 mb-4">
             <div class="card">
@@ -28,9 +36,9 @@
 
                     {% if user.is_staff %}
                     <div class="mb-4">
-                        <a href="{% url 's3app:create_test_documents' %}" class="btn btn-warning">
-                            <i class="fas fa-plus-circle me-1"></i> Создать тестовые документы
-                        </a>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDocumentModal">
+                            <i class="fas fa-plus-circle me-1"></i> Создать документ для подписания
+                        </button>
                     </div>
                     {% endif %}
 
@@ -74,7 +82,7 @@
                                                     <a href="{% url 's3app:view_document' document_id=doc.id %}" class="btn btn-sm btn-primary">
                                                         <i class="fas fa-eye me-1"></i> Просмотр
                                                     </a>
-                                                    {% if doc.is_pending %}
+                                                    {% if doc.status == 'pending' %}
                                                         <form method="post" action="{% url 's3app:sign_document' document_id=doc.id %}" style="display: inline;">
                                                             {% csrf_token %}
                                                             <button type="submit" class="btn btn-sm btn-success">
@@ -108,4 +116,95 @@
         </div>
     </div>
 </div>
+
+<!-- Модальное окно создания документа для подписания -->
+{% if user.is_staff %}
+<div class="modal fade" id="createDocumentModal" tabindex="-1" aria-labelledby="createDocumentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createDocumentModalLabel">Создание документа для подписания</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="create-document-form" method="post" action="{% url 's3app:create_document_for_signature' %}">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label for="document_path" class="form-label">Файл документа</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="document_path" name="document_path" readonly required>
+                            <button type="button" class="btn btn-outline-secondary" id="select-document-btn">
+                                <i class="fas fa-folder-open"></i> Выбрать файл
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">Выберите файл из папки "__documents"</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="document_title" class="form-label">Название документа</label>
+                        <input type="text" class="form-control" id="document_title" name="title" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="document_type" class="form-label">Тип документа</label>
+                        <select class="form-select" id="document_type" name="document_type" required>
+                            <option value="" selected disabled>Выберите тип документа</option>
+                            <option value="upload">Для загрузки</option>
+                            <option value="download">Для скачивания</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="document_date" class="form-label">Дата документа</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="document_date" name="document_date">
+                            <button type="button" class="btn btn-outline-secondary" id="set-current-date-btn">
+                                <i class="fas fa-clock"></i> Сейчас
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">Если оставить поле пустым, будет использована текущая дата</small>
+                    </div>
+
+                    <div class="mt-4 text-end">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Создать документ</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно выбора документа из папки __documents -->
+<div class="modal fade" id="documentSelectModal" tabindex="-1" aria-labelledby="documentSelectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="documentSelectModalLabel">Выбор документа</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Выберите файл документа из папки <strong>__documents</strong>
+                </div>
+
+                <ul class="list-group" id="document-files-list">
+                    <li class="list-group-item text-center">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                        Загрузка списка файлов...
+                    </li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="select-document-confirm">Выбрать</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

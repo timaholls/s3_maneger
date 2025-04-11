@@ -12,6 +12,20 @@
 {% block content %}
 <div class="container-fluid">
     <div class="row">
+        <!-- Предупреждение о неподписанных документах -->
+        {% if has_pending_documents %}
+        <div class="col-12 mb-3">
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Внимание!</strong> У вас есть неподписанные документы. Пока вы не подпишете все документы,
+                вы не сможете скачивать, загружать, удалять или перемещать файлы.
+                <a href="{% url 's3app:documents_for_signature' %}" class="btn btn-sm btn-warning ms-2">
+                    <i class="fas fa-file-signature me-1"></i> Перейти к документам
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Breadcrumbs -->
         <div class="col-12 mb-3">
             <nav aria-label="breadcrumb">

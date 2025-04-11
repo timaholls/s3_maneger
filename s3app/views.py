@@ -12,7 +12,7 @@ from django import forms
 from .forms import LoginForm  # ... другие формы ...
 from .captcha import Captcha  # Импортируем класс Captcha
 
-from .models import UserPermission, S3ActionLog, TrashItem
+from .models import UserPermission, S3ActionLog, TrashItem, DocumentSignature
 from .forms import (
     LoginForm, CreateFolderForm, UploadFileForm,
     UserPermissionForm, UserCreationForm
@@ -26,6 +26,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect  # Д�
 from django.views.decorators.http import require_http_methods  # Для ограничения методов
 from django.shortcuts import render
 from django.core.paginator import Paginator
+from django.utils import timezone
 
 def login_view(request):
     """Авторизация пользователя с CAPTCHA"""
@@ -202,6 +203,11 @@ def browser_view(request, path=''):
     except ValueError:
         items_per_page = 10
 
+    # Проверяем, есть ли у пользователя неподписанные документы
+    has_pending_documents = False
+    if not request.user.is_superuser:
+        has_pending_documents = DocumentSignature.has_pending_documents(request.user)
+
     context = {
         'current_path': path,
         'parent_path': '/'.join(path.split('/')[:-1]) if path else None,
@@ -213,6 +219,7 @@ def browser_view(request, path=''):
         'search_results': [],  # Initialize search results list
         'page_obj': None,  # Initialize page_obj
         'items_per_page': items_per_page,  # Добавляем в контекст количество элементов на странице
+        'has_pending_documents': has_pending_documents,  # Добавляем статус неподписанных документов
     }
 
     try:
@@ -947,3 +954,157 @@ def _get_breadcrumbs(path):
         })
 
     return breadcrumbs
+
+@login_required
+def documents_for_signature_view(request):
+    """Отображение списка документов для подписания пользователем"""
+    user = request.user
+
+    # Получаем все документы пользователя
+    documents = DocumentSignature.objects.filter(user=user).order_by('-created_at')
+
+    # Проверяем, есть ли неподписанные документы
+    has_pending = DocumentSignature.has_pending_documents(user)
+
+    context = {
+        'documents': documents,
+        'has_pending': has_pending,
+    }
+
+    return render(request, 'documents_for_signature.html', context)
+
+@login_required
+def view_document(request, document_id):
+    """Просмотр документа для подписания (скачивание PDF)"""
+    user = request.user
+    document = get_object_or_404(DocumentSignature, id=document_id, user=user)
+
+    try:
+        s3_service = S3Service()
+
+        # Получаем временную ссылку для скачивания документа
+        result = s3_service.generate_download_url(user, document.document_path)
+
+        # Логируем действие просмотра документа
+        S3ActionLog.objects.create(
+            user=user,
+            action='read',
+            path=document.document_path,
+            details=f'Просмотр документа для подписания: {document.title}'
+        )
+
+        # Перенаправляем на временную ссылку
+        return redirect(result['url'])
+    except PermissionDenied as e:
+        messages.error(request, str(e))
+    except ClientError as e:
+        messages.error(request, f'Ошибка при загрузке документа: {str(e)}')
+
+    return redirect('s3app:documents_for_signature')
+
+@login_required
+@require_http_methods(["POST"])
+def sign_document(request, document_id):
+    """Подписание документа пользователем"""
+    user = request.user
+    document = get_object_or_404(DocumentSignature, id=document_id, user=user)
+
+    # Проверяем, не подписан ли уже документ
+    if document.status == 'signed':
+        messages.info(request, f'Документ "{document.title}" уже подписан')
+        return redirect('s3app:documents_for_signature')
+
+    # Подписываем документ (обновляем статус и время подписания)
+    document.sign()
+
+    # Логируем действие подписания
+    S3ActionLog.objects.create(
+        user=user,
+        action='sign_document',
+        path=document.document_path,
+        details=f'Подписан документ: {document.title}'
+    )
+
+    messages.success(request, f'Документ "{document.title}" успешно подписан')
+    return redirect('s3app:documents_for_signature')
+
+@staff_member_required
+def create_document_for_signature(request):
+    """Создание нового документа для подписания (доступно только для администраторов)"""
+    if request.method == 'POST':
+        title = request.POST.get('title', '').strip()
+        document_path = request.POST.get('document_path', '').strip()
+        document_type = request.POST.get('document_type', '').strip()
+
+        if not title or not document_path or not document_type:
+            messages.error(request, 'Все поля должны быть заполнены')
+            return redirect('s3app:documents_for_signature')
+
+        if document_type not in ['upload', 'download']:
+            messages.error(request, 'Неверный тип документа')
+            return redirect('s3app:documents_for_signature')
+
+        # Получаем всех активных пользователей
+        users = User.objects.filter(is_active=True)
+
+        # Создаем документ для каждого пользователя
+        for user in users:
+            # Пропускаем суперпользователей
+            if user.is_superuser:
+                continue
+
+            DocumentSignature.objects.create(
+                user=user,
+                title=title,
+                document_path=document_path,
+                document_type=document_type
+            )
+
+        messages.success(request, f'Документ "{title}" создан для всех пользователей и требует подписания')
+        return redirect('s3app:documents_for_signature')
+
+    return redirect('s3app:documents_for_signature')
+
+@staff_member_required
+def list_document_templates(request):
+    """Возвращает список документов из папки __documents (доступно только для администраторов)"""
+    try:
+        s3_service = S3Service()
+        # Получаем список документов из специальной папки
+        result = s3_service.list_objects(request.user, '__documents')
+
+        # Формируем список файлов
+        files = []
+        for file in result.get('files', []):
+            files.append({
+                'name': file['name'],
+                'path': f"__documents/{file['name']}",
+                'size': file['size'],
+                'last_modified': file['last_modified']
+            })
+
+        return JsonResponse({'files': files})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+# Модифицируем существующий метод s3_service для проверки прав на выполнение действий с файлами
+def check_document_signatures(request, action, path):
+    """Проверяет, есть ли у пользователя неподписанные документы, запрещающие действия"""
+    user = request.user
+
+    # Суперпользователи не ограничены в действиях
+    if user.is_superuser:
+        return True
+
+    # Проверяем, есть ли неподписанные документы
+    has_pending = DocumentSignature.has_pending_documents(user)
+
+    # Если нет неподписанных документов, разрешаем действия
+    if not has_pending:
+        return True
+
+    # Если есть неподписанные документы, запрещаем большинство действий
+    if action in ['write', 'delete', 'create_folder', 'download', 'upload', 'move']:
+        raise PermissionDenied('Для выполнения этого действия необходимо подписать все документы')
+
+    return True

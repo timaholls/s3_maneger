@@ -4,6 +4,8 @@ from django.conf import settings
 from django.utils.http import urlencode
 from django.shortcuts import redirect
 from django.urls import reverse, NoReverseMatch
+from django.core.exceptions import PermissionDenied
+from django.contrib import messages
 
 logger = logging.getLogger(__name__)
 
@@ -88,3 +90,70 @@ class AdminAccessMiddleware:
         # продолжаем обработку запроса как обычно
         response = self.get_response(request)
         return response
+
+
+class DocumentSignatureCheckMiddleware:
+    """Middleware для проверки наличия неподписанных документов и ограничения действий"""
+    def __init__(self, get_response):
+        self.get_response = get_response
+        # Пути, которые НЕ нужно проверять
+        self.excluded_paths = [
+            '/static/',
+            '/media/',
+            '/login/',
+            '/logout/',
+            '/browser-challenge/',
+            '/documents-for-signature/',
+            '/documents/view/',
+            '/documents/sign/',
+        ]
+        # Пути, для которых нужна проверка документов
+        self.checked_actions = [
+            '/create-folder/',
+            '/delete-folder/',
+            '/upload-file/',
+            '/delete-file/',
+            '/download-file/',
+            '/move-file/',
+            '/move-folder/',
+            '/download-multiple/',
+            '/delete-multiple/',
+            '/move-multiple/',
+        ]
+
+    def __call__(self, request):
+        # Проверяем, аутентифицирован ли пользователь
+        if not request.user.is_authenticated:
+            return self.get_response(request)
+
+        # Суперпользователи освобождены от проверки
+        if request.user.is_superuser:
+            return self.get_response(request)
+
+        # Проверяем, является ли путь исключенным из проверки
+        if any(request.path.startswith(path) for path in self.excluded_paths):
+            return self.get_response(request)
+
+        # Проверяем, относится ли путь к действиям, которые нужно проверять
+        if any(request.path.startswith(action) for action in self.checked_actions):
+            # Импортируем модель здесь, чтобы избежать циклических импортов
+            from .models import DocumentSignature
+
+            # Проверяем, есть ли у пользователя неподписанные документы
+            if DocumentSignature.has_pending_documents(request.user):
+                # Если это AJAX запрос, возвращаем JSON с ошибкой
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    from django.http import JsonResponse
+                    return JsonResponse({
+                        'error': 'Для выполнения этого действия необходимо подписать все документы',
+                        'redirect_to': reverse('s3app:documents_for_signature')
+                    }, status=403)
+
+                # Для обычных запросов добавляем сообщение и перенаправляем
+                messages.warning(
+                    request,
+                    'Для выполнения этого действия необходимо подписать все документы'
+                )
+                return redirect('s3app:documents_for_signature')
+
+        return self.get_response(request)

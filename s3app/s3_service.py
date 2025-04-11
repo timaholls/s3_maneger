@@ -7,7 +7,7 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 import datetime
 import mimetypes
-from .models import UserPermission, S3ActionLog, TrashItem
+from .models import UserPermission, S3ActionLog, TrashItem, DocumentSignature
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -129,6 +129,12 @@ class S3Service:
         """Получение списка объектов в директории (с пагинацией S3)"""
         normalized_prefix = self._normalize_path(prefix)
         print(normalized_prefix)
+
+        # Проверка специальной папки __documents - доступна только суперпользователям
+        if normalized_prefix == '__documents' or normalized_prefix.startswith('__documents/'):
+            if not user.is_superuser:
+                raise PermissionDenied("Доступ к папке документов разрешен только администраторам")
+
         if not self.check_permission(user, normalized_prefix, 'read'):
             raise PermissionDenied("У вас нет прав для просмотра содержимого этой папки")
 
@@ -162,8 +168,8 @@ class S3Service:
                             # Извлекаем имя последней части пути
                             dir_name = prefix_path.rstrip('/').split('/')[-1]
 
-                            # Скрываем папку __trash для обычных пользователей
-                            if dir_name == '__trash' and not user.is_superuser:
+                            # Скрываем служебные папки для обычных пользователей
+                            if (dir_name == '__trash' or dir_name == '__documents') and not user.is_superuser:
                                 continue
 
                             result['directories'].append({
@@ -181,8 +187,9 @@ class S3Service:
                         if item_key == s3_prefix:
                             continue
 
-                        # Скрываем файлы и папки внутри __trash для обычных пользователей
-                        if not user.is_superuser and ('__trash/' in item_key or item_key.startswith('__trash/')):
+                        # Скрываем файлы и папки внутри служебных директорий для обычных пользователей
+                        if not user.is_superuser and ('__trash/' in item_key or item_key.startswith('__trash/') or
+                                                    '__documents/' in item_key or item_key.startswith('__documents/')):
                             continue
 
                         # Извлекаем имя файла/объекта относительно текущей папки
@@ -204,15 +211,15 @@ class S3Service:
                             # Дополнительно проверим, нет ли уже такой директории из CommonPrefixes
                             dir_path_check = item_key.rstrip('/')
 
-                            # Пропускаем директории __trash для обычных пользователей
+                            # Пропускаем директории служебных папок для обычных пользователей
                             dir_name = relative_name.rstrip('/')
-                            if dir_name == '__trash' and not user.is_superuser:
+                            if (dir_name == '__trash' or dir_name == '__documents') and not user.is_superuser:
                                 continue
 
                             if not any(d['path'] == dir_path_check for d in result['directories']):
                                 # Если вдруг папка не пришла в CommonPrefixes, добавим ее
-                                # Пропускаем папки __trash для обычных пользователей
-                                if dir_name == '__trash' and not user.is_superuser:
+                                # Пропускаем служебные папки для обычных пользователей
+                                if (dir_name == '__trash' or dir_name == '__documents') and not user.is_superuser:
                                     continue
 
                                 result['directories'].append({
@@ -264,106 +271,20 @@ class S3Service:
                 print(f"Error in logging permission denied: {str(log_error)}")
             raise
 
-    def search_objects(self, user, prefix='', query='', max_results=100):
-        """Поиск объектов в S3 хранилище"""
-        # Проверка прав доступа
-        normalized_prefix = self._normalize_path(prefix)
-        if not self.check_permission(user, normalized_prefix, 'read'):
-            raise PermissionDenied("У вас нет прав для просмотра содержимого этой папки")
-
-        s3_prefix = normalized_prefix
-        if s3_prefix and not s3_prefix.endswith('/'):
-            s3_prefix += '/'
-
-        # Приводим запрос к нижнему регистру для регистронезависимого поиска
-        query = query.lower()
-
-        results = []
-        folders_found = set()  # Для отслеживания уникальных папок
-
-        try:
-            paginator = self.s3_client.get_paginator('list_objects_v2')
-            pages = paginator.paginate(
-                Bucket=self.bucket_name,
-                Prefix=s3_prefix
-            )
-
-            for page in pages:
-                if 'Contents' in page:
-                    for item in page['Contents']:
-                        key = item['Key']
-
-                        # Пропускаем объекты в корзине, если пользователь не суперпользователь
-                        if not user.is_superuser and ('__trash/' in key or key.startswith('__trash/')):
-                            continue
-
-                        # Построение относительного пути для отображения
-                        display_path = key
-                        if s3_prefix and key.startswith(s3_prefix):
-                            display_path = key[len(s3_prefix):]
-
-                        # Проверяем, не "пустая" ли это директория
-                        is_folder = key.endswith('/') and item['Size'] == 0
-
-                        # Регистронезависимый поиск в имени файла или папки
-                        if query in key.lower():
-                            # Если это папка, добавляем ее в результаты
-                            if is_folder:
-                                # Проверяем, не добавили ли мы уже эту папку
-                                if key not in folders_found:
-                                    folders_found.add(key)
-                                    results.append({
-                                        'path': key,  # Полный путь включая слеш
-                                        'display_path': display_path,
-                                        'is_folder': True,
-                                        'last_modified': item.get('LastModified')
-                                    })
-                            else:
-                                # Инициализируем элемент файла
-                                file_item = {
-                                    'path': key,
-                                    'display_path': display_path,
-                                    'is_folder': False,
-                                    'size': item['Size'],
-                                    'last_modified': item.get('LastModified')
-                                }
-
-                                # Проверяем, является ли файл изображением
-                                if self._is_image_file(display_path):
-                                    file_item['is_image'] = True
-                                    file_item['preview_url'] = self.get_presigned_url(key)
-                                else:
-                                    file_item['is_image'] = False
-
-                                results.append(file_item)
-
-                            # Если достигли максимального количества результатов, прерываем поиск
-                            if len(results) >= max_results:
-                                break
-
-                # Если достигли максимального количества результатов, прерываем поиск по страницам
-                if len(results) >= max_results:
-                    break
-
-            # Логируем успешный поиск
-            log_details = f"Search query: '{query}', found {len(results)} results"
-            self.log_action(user, 'search', s3_prefix or '(root)', details=log_details)
-
-            return results
-
-        except ClientError as e:
-            # Логируем ошибку поиска
-            self.log_action(user, 'search', s3_prefix or '(root)', success=False, details=str(e))
-            raise
-        except PermissionDenied as e:
-            # Логируем ошибку доступа при поиске
-            self.log_action(user, 'search', s3_prefix or '(root)', success=False, details=str(e))
-            raise
-
     def create_folder(self, user, folder_path):
         """Создание новой папки (директории) в S3"""
         # Нормализуем путь ДО проверки прав
         normalized_path = self._normalize_path(folder_path)
+
+        # Запрещаем создание папки с именем __documents обычным пользователям
+        if normalized_path == '__documents' or normalized_path.startswith('__documents/'):
+            if not user.is_superuser:
+                raise PermissionDenied("Создание папок документов разрешено только администраторам")
+
+        # Проверяем, есть ли у пользователя неподписанные документы
+        if not user.is_superuser and DocumentSignature.has_pending_documents(user):
+            raise PermissionDenied("Для создания папок необходимо подписать все документы")
+
         # Права проверяем на родительскую папку
         parent_path = os.path.dirname(normalized_path)
 
@@ -419,6 +340,15 @@ class S3Service:
         normalized_file_path = self._normalize_path(file_path)
         # Получаем директорию, в которой находится файл
         folder_path = os.path.dirname(normalized_file_path)
+
+        # Запрещаем удаление файлов из папки __documents обычным пользователям
+        if normalized_file_path.startswith('__documents/'):
+            if not user.is_superuser:
+                raise PermissionDenied("Удаление файлов из папки документов разрешено только администраторам")
+
+        # Проверяем, есть ли у пользователя неподписанные документы
+        if not user.is_superuser and DocumentSignature.has_pending_documents(user):
+            raise PermissionDenied("Для удаления файлов необходимо подписать все документы")
 
         # Проверяем, не является ли путь папкой (оканчивается на '/')
         if normalized_file_path.endswith('/'):
@@ -478,6 +408,15 @@ class S3Service:
     def delete_folder(self, user, folder_path):
         """Удаление папки и всего её содержимого из S3 (перемещение в корзину)"""
         normalized_path = self._normalize_path(folder_path)
+
+        # Запрещаем удаление папки __documents обычным пользователям
+        if normalized_path == '__documents' or normalized_path.startswith('__documents/'):
+            if not user.is_superuser:
+                raise PermissionDenied("Удаление папки документов разрешено только администраторам")
+
+        # Проверяем, есть ли у пользователя неподписанные документы
+        if not user.is_superuser and DocumentSignature.has_pending_documents(user):
+            raise PermissionDenied("Для удаления папок необходимо подписать все документы")
 
         # Права проверяем на саму папку, которую удаляем
         if not self.check_permission(user, normalized_path, 'delete'):
@@ -548,6 +487,235 @@ class S3Service:
         except ClientError as e:
             # Логируем неудачное действие
             self.log_action(user, 'delete', s3_prefix, success=False, details=str(e))
+            raise
+
+    def move_object(self, user, source_path, destination_folder, is_folder=False):
+        """Перемещение файла или папки из исходного пути в целевую папку"""
+        normalized_source_path = self._normalize_path(source_path)
+        normalized_destination_folder = self._normalize_path(destination_folder)
+
+        # Запрещаем перемещение папки __documents и её содержимого обычным пользователям
+        if normalized_source_path == '__documents' or normalized_source_path.startswith('__documents/'):
+            if not user.is_superuser:
+                raise PermissionDenied("Перемещение папки документов и её содержимого разрешено только администраторам")
+
+        # Запрещаем перемещение в папку __documents обычным пользователям
+        if normalized_destination_folder == '__documents' or normalized_destination_folder.startswith('__documents/'):
+            if not user.is_superuser:
+                raise PermissionDenied("Перемещение в папку документов разрешено только администраторам")
+
+        # Проверяем, есть ли у пользователя неподписанные документы
+        if not user.is_superuser and DocumentSignature.has_pending_documents(user):
+            raise PermissionDenied("Для перемещения файлов/папок необходимо подписать все документы")
+
+        # Получаем родительский путь исходного файла/папки
+        source_parent_path = os.path.dirname(normalized_source_path) if not is_folder else normalized_source_path
+
+        # Проверяем права доступа к исходному пути (право на перемещение)
+        if not self.check_permission(user, source_parent_path, 'move'):
+            raise PermissionDenied("У вас нет прав для перемещения этого объекта")
+
+        # Проверяем права доступа к целевой папке (право на запись)
+        if not self.check_permission(user, normalized_destination_folder, 'write'):
+            raise PermissionDenied("У вас нет прав для записи в целевую папку")
+
+        # Получаем имя файла или папки из исходного пути
+        object_name = os.path.basename(normalized_source_path)
+
+        # Формируем целевой путь
+        destination_path = f"{normalized_destination_folder}/{object_name}" if normalized_destination_folder else object_name
+
+        try:
+            if is_folder:
+                # Перемещение папки и всего ее содержимого
+                # S3 не имеет атомарной операции перемещения, поэтому нужно скопировать все файлы и удалить исходные
+                moved_count = 0
+
+                # Добавляем слеш в конец пути для использования в префиксе
+                source_path_prefix = f"{normalized_source_path}/" if not normalized_source_path.endswith("/") else normalized_source_path
+
+                # Получаем список всех объектов в папке
+                paginator = self.s3_client.get_paginator('list_objects_v2')
+                pages = paginator.paginate(
+                    Bucket=self.bucket_name,
+                    Prefix=source_path_prefix
+                )
+
+                # Создаем целевую папку, если она еще не существует
+                target_folder_key = f"{destination_path}/" if not destination_path.endswith('/') else destination_path
+                self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=target_folder_key,
+                    Body=''
+                )
+
+                for page in pages:
+                    if 'Contents' in page:
+                        for obj in page['Contents']:
+                            source_key = obj['Key']
+
+                            # Пропускаем объект, если это сам префикс папки
+                            if source_key == source_path_prefix:
+                                continue
+
+                            # Определяем относительный путь от корня исходной папки
+                            relative_path = source_key[len(source_path_prefix):]
+                            target_key = f"{target_folder_key}{relative_path}"
+
+                            # Копируем объект в новое расположение
+                            self.s3_client.copy_object(
+                                Bucket=self.bucket_name,
+                                CopySource=f"{self.bucket_name}/{source_key}",
+                                Key=target_key
+                            )
+
+                            # Удаляем исходный объект
+                            self.s3_client.delete_object(
+                                Bucket=self.bucket_name,
+                                Key=source_key
+                            )
+
+                            moved_count += 1
+
+                # Удаляем исходную папку (пустой объект папки)
+                if normalized_source_path.endswith('/'):
+                    folder_key = normalized_source_path
+                else:
+                    folder_key = f"{normalized_source_path}/"
+
+                self.s3_client.delete_object(
+                    Bucket=self.bucket_name,
+                    Key=folder_key
+                )
+
+                # Логируем действие
+                self.log_action(user, 'move', f"{normalized_source_path} → {destination_path}")
+
+                return {
+                    'success': True,
+                    'message': f"Папка '{object_name}' успешно перемещена в '{normalized_destination_folder or 'Корень'}'",
+                    'moved_objects_count': moved_count
+                }
+
+            else:
+                # Перемещение файла
+                # Копируем файл в новое расположение
+                self.s3_client.copy_object(
+                    Bucket=self.bucket_name,
+                    CopySource=f"{self.bucket_name}/{normalized_source_path}",
+                    Key=destination_path
+                )
+
+                # Удаляем исходный файл
+                self.s3_client.delete_object(
+                    Bucket=self.bucket_name,
+                    Key=normalized_source_path
+                )
+
+                # Логируем действие
+                self.log_action(user, 'move', f"{normalized_source_path} → {destination_path}")
+
+                return {
+                    'success': True,
+                    'message': f"Файл '{object_name}' успешно перемещен в '{normalized_destination_folder or 'Корень'}'",
+                    'moved_objects_count': 1
+                }
+
+        except ClientError as e:
+            # Логируем неудачное действие
+            self.log_action(user, 'move', f"{normalized_source_path} → {destination_path}", success=False, details=str(e))
+            raise
+
+    def _is_image_file(self, file_name):
+        """Проверяет, является ли файл изображением по его расширению"""
+        # Список распространенных расширений изображений
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.tiff', '.ico']
+        _, ext = os.path.splitext(file_name.lower())
+        return ext in image_extensions
+
+    def get_presigned_url(self, object_key, expires_in=300):
+        """Генерирует presigned URL для объекта в S3 хранилище"""
+        try:
+            url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': self.bucket_name,
+                    'Key': object_key
+                },
+                ExpiresIn=expires_in
+            )
+            return url
+        except Exception as e:
+            print(f"Error generating presigned URL: {str(e)}")
+            return None
+
+    def generate_download_url(self, user, object_key, expires_in=3600):
+        """Генерирует временную ссылку для скачивания файла, проверяя права доступа
+
+        Args:
+            user: пользователь, запрашивающий доступ
+            object_key: путь к файлу в S3
+            expires_in: время жизни ссылки в секундах (по умолчанию 1 час)
+
+        Returns:
+            dict: словарь с URL для скачивания и метаданными файла
+
+        Raises:
+            PermissionDenied: если у пользователя нет прав на скачивание файла
+            ClientError: при ошибке S3
+        """
+        # Получаем директорию, в которой находится файл
+        folder_path = "/".join(object_key.split('/')[:-1])
+
+        # Специальная обработка для PDF документов на подписание
+        # Если это документ из DocumentSignature, он скачивается даже при наличии неподписанных документов
+        is_signature_document = False
+
+        # Проверяем, не является ли файл документом для подписания
+        if not user.is_superuser:
+            try:
+                # Ищем документ с этим путем
+                doc = DocumentSignature.objects.filter(document_path=object_key, user=user).first()
+                if doc:
+                    is_signature_document = True
+            except:
+                pass
+
+        # Если это не документ для подписания и у пользователя есть неподписанные документы
+        if not is_signature_document and not user.is_superuser and DocumentSignature.has_pending_documents(user):
+            raise PermissionDenied("Для скачивания файлов необходимо подписать все документы")
+
+        # Проверяем права на чтение
+        if not self.check_permission(user, folder_path, 'read'):
+            raise PermissionDenied(f"У вас нет прав для скачивания файлов из директории '{folder_path}'")
+
+        try:
+            # Получаем информацию о файле
+            response = self.s3_client.head_object(
+                Bucket=self.bucket_name,
+                Key=object_key
+            )
+
+            # Генерируем временную ссылку
+            url = self.get_presigned_url(object_key, expires_in=expires_in)
+
+            if not url:
+                raise ClientError({"Error": {"Message": "Не удалось создать ссылку для скачивания"}}, "GetObject")
+
+            # Логируем действие
+            self.log_action(user, 'download', object_key)
+
+            # Возвращаем ссылку и метаданные
+            return {
+                'url': url,
+                'file_name': object_key.split('/')[-1],
+                'content_type': response.get('ContentType', 'application/octet-stream'),
+                'content_length': response.get('ContentLength', 0)
+            }
+
+        except ClientError as e:
+            # Логируем ошибку
+            self.log_action(user, 'download', object_key, success=False, details=str(e))
             raise
 
     def list_trash_items(self):
@@ -906,199 +1074,46 @@ class S3Service:
         except ClientError as e:
             print(f"Error getting subfolders for {parent_path}: {str(e)}")
 
-    def move_object(self, user, source_path, destination_folder, is_folder=False):
-        """Перемещение файла или папки из исходного пути в целевую папку"""
-        normalized_source_path = self._normalize_path(source_path)
-        normalized_destination_folder = self._normalize_path(destination_folder)
+    def upload_file(self, user, file_obj, destination_path):
+        """Загрузка файла в S3"""
+        normalized_path = self._normalize_path(destination_path)
+        folder_path = os.path.dirname(normalized_path)
 
-        # Получаем родительский путь исходного файла/папки
-        source_parent_path = os.path.dirname(normalized_source_path) if not is_folder else normalized_source_path
+        # Запрещаем загрузку в папку __documents обычным пользователям
+        if folder_path == '__documents' or folder_path.startswith('__documents/'):
+            if not user.is_superuser:
+                raise PermissionDenied("Загрузка файлов в папку документов разрешена только администраторам")
 
-        # Проверяем права доступа к исходному пути (право на перемещение)
-        if not self.check_permission(user, source_parent_path, 'move'):
-            raise PermissionDenied("У вас нет прав для перемещения этого объекта")
+        # Проверяем, есть ли у пользователя неподписанные документы
+        if not user.is_superuser and DocumentSignature.has_pending_documents(user):
+            raise PermissionDenied("Для загрузки файлов необходимо подписать все документы")
 
-        # Проверяем права доступа к целевой папке (право на запись)
-        if not self.check_permission(user, normalized_destination_folder, 'write'):
-            raise PermissionDenied("У вас нет прав для записи в целевую папку")
-
-        # Получаем имя файла или папки из исходного пути
-        object_name = os.path.basename(normalized_source_path)
-
-        # Формируем целевой путь
-        destination_path = f"{normalized_destination_folder}/{object_name}" if normalized_destination_folder else object_name
+        # Проверяем права доступа на запись в директорию
+        if not self.check_permission(user, folder_path, 'write'):
+            raise PermissionDenied(f"У вас нет прав для загрузки файлов в директорию '{folder_path}'")
 
         try:
-            if is_folder:
-                # Перемещение папки и всего ее содержимого
-                # S3 не имеет атомарной операции перемещения, поэтому нужно скопировать все файлы и удалить исходные
-                moved_count = 0
+            # Определяем content_type на основе расширения файла
+            content_type, _ = mimetypes.guess_type(file_obj.name)
+            if not content_type:
+                content_type = 'application/octet-stream'  # Если тип не определен, используем binary
 
-                # Добавляем слеш в конец пути для использования в префиксе
-                source_path_prefix = f"{normalized_source_path}/" if not normalized_source_path.endswith("/") else normalized_source_path
-
-                # Получаем список всех объектов в папке
-                paginator = self.s3_client.get_paginator('list_objects_v2')
-                pages = paginator.paginate(
-                    Bucket=self.bucket_name,
-                    Prefix=source_path_prefix
-                )
-
-                # Создаем целевую папку, если она еще не существует
-                target_folder_key = f"{destination_path}/" if not destination_path.endswith('/') else destination_path
-                self.s3_client.put_object(
-                    Bucket=self.bucket_name,
-                    Key=target_folder_key,
-                    Body=''
-                )
-
-                for page in pages:
-                    if 'Contents' in page:
-                        for obj in page['Contents']:
-                            source_key = obj['Key']
-
-                            # Пропускаем объект, если это сам префикс папки
-                            if source_key == source_path_prefix:
-                                continue
-
-                            # Определяем относительный путь от корня исходной папки
-                            relative_path = source_key[len(source_path_prefix):]
-                            target_key = f"{target_folder_key}{relative_path}"
-
-                            # Копируем объект в новое расположение
-                            self.s3_client.copy_object(
-                                Bucket=self.bucket_name,
-                                CopySource=f"{self.bucket_name}/{source_key}",
-                                Key=target_key
-                            )
-
-                            # Удаляем исходный объект
-                            self.s3_client.delete_object(
-                                Bucket=self.bucket_name,
-                                Key=source_key
-                            )
-
-                            moved_count += 1
-
-                # Удаляем исходную папку (пустой объект папки)
-                if normalized_source_path.endswith('/'):
-                    folder_key = normalized_source_path
-                else:
-                    folder_key = f"{normalized_source_path}/"
-
-                self.s3_client.delete_object(
-                    Bucket=self.bucket_name,
-                    Key=folder_key
-                )
-
-                # Логируем действие
-                self.log_action(user, 'move', f"{normalized_source_path} → {destination_path}")
-
-                return {
-                    'success': True,
-                    'message': f"Папка '{object_name}' успешно перемещена в '{normalized_destination_folder or 'Корень'}'",
-                    'moved_objects_count': moved_count
-                }
-
-            else:
-                # Перемещение файла
-                # Копируем файл в новое расположение
-                self.s3_client.copy_object(
-                    Bucket=self.bucket_name,
-                    CopySource=f"{self.bucket_name}/{normalized_source_path}",
-                    Key=destination_path
-                )
-
-                # Удаляем исходный файл
-                self.s3_client.delete_object(
-                    Bucket=self.bucket_name,
-                    Key=normalized_source_path
-                )
-
-                # Логируем действие
-                self.log_action(user, 'move', f"{normalized_source_path} → {destination_path}")
-
-                return {
-                    'success': True,
-                    'message': f"Файл '{object_name}' успешно перемещен в '{normalized_destination_folder or 'Корень'}'",
-                    'moved_objects_count': 1
-                }
-
-        except ClientError as e:
-            # Логируем неудачное действие
-            self.log_action(user, 'move', f"{normalized_source_path} → {destination_path}", success=False, details=str(e))
-            raise
-
-    def _is_image_file(self, file_name):
-        """Проверяет, является ли файл изображением по его расширению"""
-        # Список распространенных расширений изображений
-        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.tiff', '.ico']
-        _, ext = os.path.splitext(file_name.lower())
-        return ext in image_extensions
-
-    def get_presigned_url(self, object_key, expires_in=300):
-        """Генерирует presigned URL для объекта в S3 хранилище"""
-        try:
-            url = self.s3_client.generate_presigned_url(
-                'get_object',
-                Params={
-                    'Bucket': self.bucket_name,
-                    'Key': object_key
-                },
-                ExpiresIn=expires_in
+            # Загружаем файл в S3
+            self.s3_client.upload_fileobj(
+                file_obj,
+                self.bucket_name,
+                normalized_path,
+                ExtraArgs={'ContentType': content_type}
             )
-            return url
-        except Exception as e:
-            print(f"Error generating presigned URL: {str(e)}")
-            return None
-
-    def generate_download_url(self, user, object_key, expires_in=3600):
-        """Генерирует временную ссылку для скачивания файла, проверяя права доступа
-
-        Args:
-            user: пользователь, запрашивающий доступ
-            object_key: путь к файлу в S3
-            expires_in: время жизни ссылки в секундах (по умолчанию 1 час)
-
-        Returns:
-            dict: словарь с URL для скачивания и метаданными файла
-
-        Raises:
-            PermissionDenied: если у пользователя нет прав на скачивание файла
-            ClientError: при ошибке S3
-        """
-        # Получаем директорию, в которой находится файл
-        folder_path = "/".join(object_key.split('/')[:-1])
-
-        # Проверяем права на чтение
-        if not self.check_permission(user, folder_path, 'read'):
-            raise PermissionDenied(f"У вас нет прав для скачивания файлов из директории '{folder_path}'")
-
-        try:
-            # Получаем информацию о файле
-            response = self.s3_client.head_object(
-                Bucket=self.bucket_name,
-                Key=object_key
-            )
-
-            # Генерируем временную ссылку
-            url = self.get_presigned_url(object_key, expires_in=expires_in)
-
-            if not url:
-                raise ClientError({"Error": {"Message": "Не удалось создать ссылку для скачивания"}}, "GetObject")
 
             # Логируем действие
-            self.log_action(user, 'download', object_key)
+            self.log_action(user, 'upload', normalized_path)
 
-            # Возвращаем ссылку и метаданные
             return {
-                'url': url,
-                'file_name': object_key.split('/')[-1],
-                'content_type': response.get('ContentType', 'application/octet-stream'),
-                'content_length': response.get('ContentLength', 0)
+                'success': True,
+                'message': f"Файл '{os.path.basename(normalized_path)}' успешно загружен"
             }
-
         except ClientError as e:
-            # Логируем ошибку
-            self.log_action(user, 'download', object_key, success=False, details=str(e))
+            # Логируем неудачное действие
+            self.log_action(user, 'upload', normalized_path, success=False, details=str(e))
             raise

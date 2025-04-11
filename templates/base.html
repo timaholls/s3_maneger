@@ -73,6 +73,11 @@
                             <i class="fas fa-folder me-1"></i> Файлы
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'documents_for_signature' %}active{% endif %}" href="{% url 's3app:documents_for_signature' %}">
+                            <i class="fas fa-file-signature me-1"></i> Документы для подписи
+                        </a>
+                    </li>
                     {% if user.is_staff %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.url_name == 'user_list' %}active{% endif %}" href="{% url 's3app:user_list' %}">

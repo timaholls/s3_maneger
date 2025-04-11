@@ -16,8 +16,6 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['manager.bytegate.ru', 'localhost', '127.0.0.1']
 
-
-
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -52,6 +50,8 @@ MIDDLEWARE = [
     # Проверка страницы админа
     's3app.middleware.AdminAccessMiddleware',  # <-- Укажите правильный путь к классу
 
+    # Проверка документов для подписания
+    's3app.middleware.DocumentSignatureCheckMiddleware',
 ]
 
 # (Опционально) Настройки для RateLimitMiddleware
