@@ -440,6 +440,29 @@
         </div>
     </div>
 </div>
+
+<!-- Модальное окно для просмотра изображений -->
+<div class="modal fade" id="imageViewModal" tabindex="-1" aria-labelledby="imageViewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageViewModalLabel">Просмотр изображения</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Image" class="img-fluid">
+            </div>
+            <div class="modal-footer">
+                <a id="downloadImageBtn" href="#" class="btn btn-primary" download>
+                    <i class="fas fa-download me-1"></i> Скачать
+                </a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Закрыть
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -814,95 +837,59 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // JavaScript для обработки просмотра изображений
-    document.addEventListener('DOMContentLoaded', function() {
-        // Функция для открытия модального окна с изображением
-        function openImagePreview(imageUrl, imageName, filePath) {
-            // Устанавливаем значения для модального окна
-            document.getElementById('imageViewModalLabel').textContent = `Просмотр: ${imageName}`;
+    function openImagePreview(imageUrl, imageName, filePath) {
+        // Устанавливаем значения для модального окна
+        document.getElementById('imageViewModalLabel').textContent = `Просмотр: ${imageName}`;
 
-            // Устанавливаем изображение
-            const modalImage = document.getElementById('modalImage');
-            modalImage.setAttribute('src', imageUrl);
-            modalImage.setAttribute('alt', imageName);
+        // Устанавливаем изображение
+        const modalImage = document.getElementById('modalImage');
+        modalImage.setAttribute('src', imageUrl);
+        modalImage.setAttribute('alt', imageName);
 
-            // Настраиваем кнопку скачивания
-            const downloadBtn = document.getElementById('downloadImageBtn');
-            downloadBtn.setAttribute('href', `{% url 's3app:download_file' path='PLACEHOLDER' %}`.replace('PLACEHOLDER', filePath));
+        // Настраиваем кнопку скачивания
+        const downloadBtn = document.getElementById('downloadImageBtn');
+        downloadBtn.setAttribute('href', `{% url 's3app:download_file' path='PLACEHOLDER' %}`.replace('PLACEHOLDER', filePath));
 
-            // Открываем модальное окно
-            const imageViewModal = new bootstrap.Modal(document.getElementById('imageViewModal'));
-            imageViewModal.show();
+        // Открываем модальное окно
+        const imageViewModal = new bootstrap.Modal(document.getElementById('imageViewModal'));
+        imageViewModal.show();
+    }
 
-            // Обработчик клавиш для модального окна
-            const handleModalKeydown = function(e) {
-                // Закрыть окно при нажатии Escape
-                if (e.key === 'Escape') {
-                    imageViewModal.hide();
-                }
-            };
+    // Находим все миниатюры изображений
+    const thumbnails = document.querySelectorAll('.image-preview-thumbnail');
 
-            // Добавляем обработчик клавиш при открытии модального окна
-            document.addEventListener('keydown', handleModalKeydown);
+    // Добавляем обработчик клика для каждой миниатюры
+    thumbnails.forEach(thumbnail => {
+        thumbnail.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
 
-            // Удаляем обработчик при закрытии модального окна
-            const modalElement = document.getElementById('imageViewModal');
-            modalElement.addEventListener('hidden.bs.modal', function() {
-                document.removeEventListener('keydown', handleModalKeydown);
-            }, { once: true });
-        }
+            const imageUrl = this.getAttribute('data-src');
+            const imageName = this.getAttribute('data-name');
+            const fileItem = this.closest('.js-file-item');
+            const filePath = fileItem.getAttribute('data-file-path');
 
-        // Находим все миниатюры изображений
-        const thumbnails = document.querySelectorAll('.image-preview-thumbnail');
-
-        // Добавляем обработчик клика для каждой миниатюры
-        thumbnails.forEach(thumbnail => {
-            thumbnail.addEventListener('click', function(e) {
-                // Останавливаем всплытие события и предотвращаем стандартное действие
-                e.preventDefault();
-                e.stopPropagation();
-
-                // Получаем URL изображения и имя из data-атрибутов
-                const imageUrl = this.getAttribute('data-src');
-                const imageName = this.getAttribute('data-name');
-
-                // Находим родительский элемент с путем к файлу
-                const fileItem = this.closest('.js-file-item');
-                const filePath = fileItem.getAttribute('data-file-path');
-
-                // Открываем модальное окно с изображением
-                openImagePreview(imageUrl, imageName, filePath);
-
-                return false;
-            });
-        });
-
-        // Добавляем обработчик клика на все элементы файлов
-        document.querySelectorAll('.js-file-item').forEach(fileItem => {
-            fileItem.addEventListener('click', function(e) {
-                // Проверяем, является ли файл изображением
-                const isImage = this.getAttribute('data-is-image') === 'true';
-
-                if (isImage) {
-                    // Предотвращаем стандартное действие
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    // Получаем данные файла
-                    const previewUrl = this.getAttribute('data-preview-url');
-                    const fileName = this.getAttribute('data-file-name');
-                    const filePath = this.getAttribute('data-file-path');
-
-                    // Открываем модальное окно с изображением
-                    openImagePreview(previewUrl, fileName, filePath);
-                } else {
-                    // Для не-изображений, можно добавить другую логику или ничего не делать
-                    console.log('Клик на файл, который не является изображением:', this.getAttribute('data-file-name'));
-                }
-            });
+            openImagePreview(imageUrl, imageName, filePath);
         });
     });
 
-    // ... остальной код ...
+    // Добавляем обработчик клика на все элементы файлов
+    document.querySelectorAll('.js-file-item').forEach(fileItem => {
+        fileItem.addEventListener('click', function(e) {
+            const isImage = this.getAttribute('data-is-image') === 'true';
+
+            if (isImage) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const previewUrl = this.getAttribute('data-preview-url');
+                const fileName = this.getAttribute('data-file-name');
+                const filePath = this.getAttribute('data-file-path');
+
+                openImagePreview(previewUrl, fileName, filePath);
+            }
+        });
+    });
 });
 </script>
 {% endblock %}
