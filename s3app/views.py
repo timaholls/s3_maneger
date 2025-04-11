@@ -1108,3 +1108,57 @@ def check_document_signatures(request, action, path):
         raise PermissionDenied('Для выполнения этого действия необходимо подписать все документы')
 
     return True
+
+@staff_member_required
+def get_signature_status(request):
+    """Возвращает статус подписания документов по пользователям (для администраторов)"""
+    try:
+        # Получаем всех активных пользователей
+        users = User.objects.filter(is_active=True)
+
+        # Исключаем суперпользователей
+        users = users.exclude(is_superuser=True)
+
+        # Собираем информацию о статусе подписания для каждого пользователя
+        users_status = []
+        all_signed = True
+
+        for user in users:
+            # Получаем неподписанные документы пользователя
+            pending_documents = DocumentSignature.objects.filter(
+                user=user,
+                status='pending'
+            )
+
+            has_pending = pending_documents.exists()
+
+            # Если у пользователя есть неподписанные документы, то не все документы подписаны
+            if has_pending:
+                all_signed = False
+
+            # Собираем названия неподписанных документов
+            pending_doc_titles = [doc.title for doc in pending_documents]
+
+            users_status.append({
+                'username': user.username,
+                'has_pending': has_pending,
+                'pending_documents': pending_doc_titles
+            })
+
+        return JsonResponse({
+            'all_signed': all_signed,
+            'users_status': users_status
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@staff_member_required
+def delete_document(request, document_id):
+    """Удаление документа для подписания (доступно только для администраторов)"""
+    if request.method == 'POST':
+        document = get_object_or_404(DocumentSignature, id=document_id)
+        title = document.title
+        document.delete()
+        messages.success(request, f'Документ "{title}" успешно удален')
+
+    return redirect('s3app:documents_for_signature')

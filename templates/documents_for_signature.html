@@ -21,25 +21,44 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    {% if has_pending %}
-                        <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Внимание!</strong> У вас есть неподписанные документы. Пока вы не подпишете все документы,
-                            вы не сможете скачивать, загружать, удалять или перемещать файлы.
+                    {% if user.is_staff %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Информация!</strong> Вы можете управлять документами, требующими подписания. Ниже отображаются все документы, созданные для пользователей.
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <button type="button" class="btn btn-primary mb-2" data-bs-toggle="modal" data-bs-target="#createDocumentModal">
+                                    <i class="fas fa-plus-circle me-1"></i> Создать документ для подписания
+                                </button>
+                            </div>
+                            <div class="col-md-6 text-md-end">
+                                <button type="button" class="btn btn-info mb-2" data-bs-toggle="modal" data-bs-target="#signatureStatusModal">
+                                    <i class="fas fa-clipboard-check me-1"></i> Статус подписания
+                                </button>
+                            </div>
                         </div>
                     {% else %}
-                        <div class="alert alert-success">
-                            <i class="fas fa-check-circle me-2"></i>
-                            <strong>Отлично!</strong> Все документы подписаны. Вы можете работать с файлами.
-                        </div>
-                    {% endif %}
+                        {% if has_pending %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>Внимание!</strong> У вас есть неподписанные документы. Пока вы не подпишете все документы,
+                                вы не сможете скачивать, загружать, удалять или перемещать файлы.
+                            </div>
+                        {% else %}
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle me-2"></i>
+                                <strong>Отлично!</strong> Все документы подписаны. Вы можете работать с файлами.
+                            </div>
+                        {% endif %}
 
-                    {% if user.is_staff %}
-                    <div class="mb-4">
-                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDocumentModal">
-                            <i class="fas fa-plus-circle me-1"></i> Создать документ для подписания
-                        </button>
-                    </div>
+                        {% if user.is_staff %}
+                        <div class="mb-4">
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDocumentModal">
+                                <i class="fas fa-plus-circle me-1"></i> Создать документ для подписания
+                            </button>
+                        </div>
+                        {% endif %}
                     {% endif %}
 
                     <h5 class="mt-4 mb-3">Список документов</h5>
@@ -54,6 +73,9 @@
                                     <th>Дата создания</th>
                                     <th>Дата подписания</th>
                                     <th>Действия</th>
+                                    {% if user.is_staff %}
+                                    <th>Пользователь</th>
+                                    {% endif %}
                                 </tr>
                             </thead>
                             <tbody>
@@ -82,7 +104,7 @@
                                                     <a href="{% url 's3app:view_document' document_id=doc.id %}" class="btn btn-sm btn-primary">
                                                         <i class="fas fa-eye me-1"></i> Просмотр
                                                     </a>
-                                                    {% if doc.status == 'pending' %}
+                                                    {% if doc.status == 'pending' and not user.is_staff %}
                                                         <form method="post" action="{% url 's3app:sign_document' document_id=doc.id %}" style="display: inline;">
                                                             {% csrf_token %}
                                                             <button type="submit" class="btn btn-sm btn-success">
@@ -90,13 +112,21 @@
                                                             </button>
                                                         </form>
                                                     {% endif %}
+                                                    {% if user.is_staff %}
+                                                        <button type="button" class="btn btn-sm btn-danger delete-document-btn" data-document-id="{{ doc.id }}" data-document-title="{{ doc.title }}">
+                                                            <i class="fas fa-trash me-1"></i> Удалить
+                                                        </button>
+                                                    {% endif %}
                                                 </div>
                                             </td>
+                                            {% if user.is_staff %}
+                                            <td>{{ doc.user.username }}</td>
+                                            {% endif %}
                                         </tr>
                                     {% endfor %}
                                 {% else %}
                                     <tr>
-                                        <td colspan="6" class="text-center py-3">
+                                        <td colspan="{% if user.is_staff %}7{% else %}6{% endif %}" class="text-center py-3">
                                             <i class="fas fa-info-circle me-2"></i>
                                             Нет документов для подписи.
                                         </td>
@@ -206,5 +236,182 @@
         </div>
     </div>
 </div>
+
+<!-- Модальное окно статуса подписания документов -->
+<div class="modal fade" id="signatureStatusModal" tabindex="-1" aria-labelledby="signatureStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="signatureStatusModalLabel">Статус подписания документов</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Здесь отображается статус подписания документов пользователями
+                </div>
+
+                <div id="signatureStatusContent">
+                    <div class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                        <p class="mt-2">Загрузка данных о статусе подписания...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" id="refresh-status">Обновить данные</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения удаления документа -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmDeleteModalLabel">Подтверждение удаления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить документ "<span id="documentToDelete"></span>"?</p>
+                <p class="text-danger"><strong>Внимание:</strong> Это действие нельзя отменить!</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <form id="deleteDocumentForm" method="post" action="">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Удалить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    {% if user.is_staff %}
+    // Обработчик удаления документа
+    const deleteButtons = document.querySelectorAll('.delete-document-btn');
+    deleteButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const documentId = this.getAttribute('data-document-id');
+            const documentTitle = this.getAttribute('data-document-title');
+
+            // Заполняем модальное окно подтверждения
+            document.getElementById('documentToDelete').textContent = documentTitle;
+            document.getElementById('deleteDocumentForm').action = `/documents/delete/${documentId}/`;
+
+            // Показываем модальное окно
+            const confirmDeleteModal = new bootstrap.Modal(document.getElementById('confirmDeleteModal'));
+            confirmDeleteModal.show();
+        });
+    });
+
+    // Обработчик обновления статуса подписания
+    document.getElementById('refresh-status').addEventListener('click', function() {
+        loadSignatureStatus();
+    });
+
+    // Функция загрузки статуса подписания
+    function loadSignatureStatus() {
+        const statusContainer = document.getElementById('signatureStatusContent');
+        statusContainer.innerHTML = `
+            <div class="text-center py-3">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Загрузка...</span>
+                </div>
+                <p class="mt-2">Загрузка данных о статусе подписания...</p>
+            </div>
+        `;
+
+        // Запрос на сервер для получения статуса подписания
+        fetch('/documents/signature-status/', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Ошибка при получении статуса подписания');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.all_signed) {
+                // Все пользователи подписали документы
+                statusContainer.innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Отлично!</strong> Все пользователи подписали все документы.
+                    </div>
+                `;
+            } else {
+                // Есть пользователи с неподписанными документами
+                let content = `
+                    <div class="alert alert-warning mb-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Внимание!</strong> Есть пользователи, которые не подписали все документы.
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Пользователь</th>
+                                    <th>Документы</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                data.users_status.forEach(user => {
+                    content += `
+                        <tr>
+                            <td>${user.username}</td>
+                            <td>${user.pending_documents.join(', ') || '-'}</td>
+                            <td>
+                                ${user.has_pending ?
+                                    '<span class="badge bg-warning text-dark">Есть неподписанные</span>' :
+                                    '<span class="badge bg-success">Все подписано</span>'}
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                content += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                statusContainer.innerHTML = content;
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            statusContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>Ошибка!</strong> Не удалось загрузить данные о статусе подписания: ${error.message}
+                </div>
+            `;
+        });
+    }
+
+    // Загружаем статус подписания при открытии модального окна
+    document.getElementById('signatureStatusModal').addEventListener('shown.bs.modal', function() {
+        loadSignatureStatus();
+    });
+    {% endif %}
+});
+</script>
 {% endblock %}

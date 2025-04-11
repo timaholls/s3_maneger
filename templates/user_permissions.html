@@ -25,6 +25,7 @@
                                     <th scope="col" class="text-center">Чтение</th>
                                     <th scope="col" class="text-center">Запись</th>
                                     <th scope="col" class="text-center">Удаление</th>
+                                    <th scope="col" class="text-center">Перемещение</th>
                                     <th scope="col" class="text-center">Действия</th>
                                 </tr>
                             </thead>
@@ -53,6 +54,13 @@
                                         <i class="fas fa-times-circle text-secondary" title="Запрещено"></i>
                                         {% endif %}
                                     </td>
+                                    <td data-label="Перемещение" class="text-center">
+                                        {% if perm.can_move %}
+                                        <i class="fas fa-check-circle text-success" title="Разрешено"></i>
+                                        {% else %}
+                                        <i class="fas fa-times-circle text-secondary" title="Запрещено"></i>
+                                        {% endif %}
+                                    </td>
                                     <td data-label="Действия" class="actions-cell">
                                          <div class="action-buttons">
                                              <a href="{% url 's3app:delete_permission' perm_id=perm.id %}"
@@ -66,7 +74,7 @@
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="5" class="text-center py-4"> {# Adjusted colspan #}
+                                    <td colspan="6" class="text-center py-4"> {# Adjusted colspan #}
                                         <i class="fas fa-info-circle me-2"></i> Нет назначенных прав доступа.
                                     </td>
                                 </tr>
@@ -135,10 +143,17 @@
                                  </label>
                              </div>
 
-                             <div class="form-check">
+                             <div class="form-check mb-2">
                                  {{ form.can_delete }} {# Widget defined in forms.py has class #}
                                  <label class="form-check-label" for="{{ form.can_delete.id_for_label }}">
                                      Может удалять
+                                 </label>
+                             </div>
+
+                             <div class="form-check">
+                                 {{ form.can_move }} {# Widget defined in forms.py has class #}
+                                 <label class="form-check-label" for="{{ form.can_move.id_for_label }}">
+                                     Может перемещать
                                  </label>
                              </div>
                         </fieldset>
@@ -248,70 +263,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Функция debounce для сокращения количества запросов при вводе
-    function debounce(func, wait) {
+    function debounce(func, delay) {
         let timeout;
-        return function(...args) {
+        return function() {
             const context = this;
+            const args = arguments;
             clearTimeout(timeout);
-            timeout = setTimeout(() => func.apply(context, args), wait);
+            timeout = setTimeout(() => func.apply(context, args), delay);
         };
     }
 
-    // Настройка кнопки добавления пути
-    const addPathBtn = document.querySelector('.add-path-btn');
-    if (addPathBtn) {
-        addPathBtn.addEventListener('click', addPathField);
-    }
-
-    // Настройка существующих полей ввода пути
+    // Настройка начальных элементов
     setupPathInputs(document.querySelectorAll('.path-input'));
 
-    // Настройка отправки формы
-    const permissionForm = document.getElementById('permissionForm');
-    if (permissionForm) {
-        permissionForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const formData = new FormData(this);
-
-            // Собираем все пути и добавляем их как параметры формы
-            const paths = Array.from(document.querySelectorAll('.path-input')).map(input => input.value.trim());
-
-            // Очищаем существующие пути из FormData
-            for (let pair of formData.entries()) {
-                if (pair[0] === 'folder_paths[]') {
-                    formData.delete(pair[0]);
-                }
-            }
-
-            // Добавляем пути в FormData
-            paths.forEach(path => {
-                if (path) {
-                    formData.append('folder_paths[]', path);
-                }
-            });
-
-            // Если пользователь не выбрал ни одного пути, добавляем пустой путь (корень)
-            if (paths.length === 0 || paths.every(path => !path)) {
-                formData.append('folder_paths[]', '');
-            }
-
-            // Отправляем форму
-            fetch(permissionForm.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
-                }
-            }).then(response => {
-                // Перезагружаем страницу после успешной отправки
-                window.location.reload();
-            }).catch(error => {
-                console.error('Ошибка при отправке формы:', error);
-                alert('Произошла ошибка при сохранении прав. Пожалуйста, попробуйте еще раз.');
-            });
-        });
-    }
+    // Настройка кнопки добавления пути
+    document.querySelector('.add-path-btn').addEventListener('click', addPathField);
 });
 </script>
 {% endblock %}

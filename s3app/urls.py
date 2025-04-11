@@ -79,4 +79,6 @@ urlpatterns = [
     path('documents/sign/<int:document_id>/', views.sign_document, name='sign_document'),
     path('documents/create/', views.create_document_for_signature, name='create_document_for_signature'),
     path('documents/list-templates/', views.list_document_templates, name='list_document_templates'),
+    path('documents/delete/<int:document_id>/', views.delete_document, name='delete_document'),
+    path('documents/signature-status/', views.get_signature_status, name='signature_status'),
 ]

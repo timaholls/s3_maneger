@@ -158,7 +158,10 @@
                             <button id="downloadSelected" class="btn btn-sm btn-primary" disabled>
                                 <i class="fas fa-download me-1"></i> Скачать
                             </button>
-                            <button id="moveSelected" class="btn btn-sm btn-success" disabled>
+                            <button id="moveSelected" class="btn btn-sm btn-success" disabled
+                                    {% if not user.is_superuser and not user_permissions.can_move %}
+                                    onclick="alert('У вас нет прав на перемещение файлов и папок.'); return false;"
+                                    {% endif %}>
                                 <i class="fas fa-arrows-alt me-1"></i> Переместить
                             </button>
                             <button id="deleteSelected" class="btn btn-sm btn-danger" disabled>
@@ -204,7 +207,13 @@
                                                         <a href="{% url 's3app:download_file' path=item.path %}" class="btn btn-sm btn-primary action-btn" title="Скачать {{ item.display_path }}">
                                                             <i class="fas fa-download"></i>
                                                         </a>
-                                                        <button type="button" class="btn btn-sm btn-success action-btn move-btn" data-bs-toggle="modal" data-bs-target="#moveModal" data-type="folder" data-path="{{ item.path }}" data-name="{{ item.display_path }}" title="Переместить папку {{ item.display_path }}">
+                                                        <button type="button" class="btn btn-sm btn-success action-btn move-btn"
+                                                                {% if user.is_superuser or user_permissions.can_move %}
+                                                                data-bs-toggle="modal" data-bs-target="#moveModal"
+                                                                {% else %}
+                                                                onclick="alert('У вас нет прав на перемещение файлов и папок.'); return false;"
+                                                                {% endif %}
+                                                                data-type="folder" data-path="{{ item.path }}" data-name="{{ item.display_path }}" title="Переместить папку {{ item.display_path }}">
                                                             <i class="fas fa-arrows-alt"></i>
                                                         </button>
                                                         <a href="{% url 's3app:delete_folder' path=item.path|slice:":-1" %}" class="btn btn-sm btn-danger action-btn" title="Удалить папку {{ item.display_path }}" onclick="return confirm('Вы уверены, что хотите удалить папку {{ item.display_path }} и всё её содержимое?')">
@@ -238,7 +247,13 @@
                                                         <a href="{% url 's3app:download_file' path=item.path %}" class="btn btn-sm btn-primary action-btn" title="Скачать {{ item.display_path }}">
                                                             <i class="fas fa-download"></i>
                                                         </a>
-                                                        <button type="button" class="btn btn-sm btn-success action-btn move-btn" data-bs-toggle="modal" data-bs-target="#moveModal" data-type="file" data-path="{{ item.path }}" data-name="{{ item.display_path }}" title="Переместить {{ item.display_path }}">
+                                                        <button type="button" class="btn btn-sm btn-success action-btn move-btn"
+                                                                {% if user.is_superuser or user_permissions.can_move %}
+                                                                data-bs-toggle="modal" data-bs-target="#moveModal"
+                                                                {% else %}
+                                                                onclick="alert('У вас нет прав на перемещение файлов и папок.'); return false;"
+                                                                {% endif %}
+                                                                data-type="file" data-path="{{ item.path }}" data-name="{{ item.display_path }}" title="Переместить {{ item.display_path }}">
                                                             <i class="fas fa-arrows-alt"></i>
                                                         </button>
                                                         <a href="{% url 's3app:delete_file' path=item.path %}" class="btn btn-sm btn-danger action-btn" title="Удалить {{ item.display_path }}" onclick="return confirm('Вы уверены, что хотите удалить файл {{ item.display_path }}?')">
@@ -281,7 +296,13 @@
                                                         <a href="{% url 's3app:download_file' path=item.path %}" class="btn btn-sm btn-primary action-btn" title="Скачать {{ item.name }}">
                                                             <i class="fas fa-download"></i>
                                                         </a>
-                                                        <button type="button" class="btn btn-sm btn-success action-btn move-btn" data-bs-toggle="modal" data-bs-target="#moveModal" data-type="file" data-path="{{ item.path }}" data-name="{{ item.name }}" title="Переместить {{ item.name }}">
+                                                        <button type="button" class="btn btn-sm btn-success action-btn move-btn"
+                                                                {% if user.is_superuser or user_permissions.can_move %}
+                                                                data-bs-toggle="modal" data-bs-target="#moveModal"
+                                                                {% else %}
+                                                                onclick="alert('У вас нет прав на перемещение файлов и папок.'); return false;"
+                                                                {% endif %}
+                                                                data-type="file" data-path="{{ item.path }}" data-name="{{ item.name }}" title="Переместить {{ item.name }}">
                                                             <i class="fas fa-arrows-alt"></i>
                                                         </button>
                                                         <a href="{% url 's3app:delete_file' path=item.path %}" class="btn btn-sm btn-danger action-btn" title="Удалить {{ item.name }}" onclick="return confirm('Вы уверены, что хотите удалить файл {{ item.name }}?')">
@@ -303,7 +324,13 @@
                                                 <td data-label="Дата изменения"></td>
                                                 <td data-label="Действия" class="actions-cell">
                                                     <div class="action-buttons">
-                                                        <button type="button" class="btn btn-sm btn-success action-btn move-btn" data-bs-toggle="modal" data-bs-target="#moveModal" data-type="folder" data-path="{{ item.path }}" data-name="{{ item.name }}" title="Переместить папку {{ item.name }}">
+                                                        <button type="button" class="btn btn-sm btn-success action-btn move-btn"
+                                                                {% if user.is_superuser or user_permissions.can_move %}
+                                                                data-bs-toggle="modal" data-bs-target="#moveModal"
+                                                                {% else %}
+                                                                onclick="alert('У вас нет прав на перемещение файлов и папок.'); return false;"
+                                                                {% endif %}
+                                                                data-type="folder" data-path="{{ item.path }}" data-name="{{ item.name }}" title="Переместить папку {{ item.name }}">
                                                             <i class="fas fa-arrows-alt"></i>
                                                         </button>
                                                         <a href="{% url 's3app:delete_folder' path=item.path %}" class="btn btn-sm btn-danger action-btn" title="Удалить папку {{ item.name }}" onclick="return confirm('Вы уверены, что хотите удалить папку {{ item.name }} и всё её содержимое?')">
@@ -655,7 +682,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const moveBtns = document.querySelectorAll('.move-btn');
     if (moveBtns.length > 0) {
         moveBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function(e) {
+                // Проверка прав на перемещение
+                {% if not user.is_superuser and not user_permissions.can_move %}
+                e.preventDefault();
+                e.stopPropagation();
+                alert('У вас нет прав на перемещение файлов и папок.');
+                return false;
+                {% endif %}
+
                 const type = this.dataset.type;
                 const path = this.dataset.path;
                 const name = this.dataset.name;
@@ -684,10 +719,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Обработчик кнопки перемещения нескольких объектов
     document.getElementById('moveSelected').addEventListener('click', function() {
+        {% if not user.is_superuser and not user_permissions.can_move %}
+        alert('У вас нет прав на перемещение файлов и папок.');
+        return false;
+        {% else %}
         // Получаем выбранные файлы и папки
         const selectedFiles = Array.from(document.querySelectorAll('.item-checkbox:checked'))
             .filter(item => item.dataset.type === 'file')
             .map(item => item.dataset.path);
+        {% endif %}
 
         const selectedFolders = Array.from(document.querySelectorAll('.item-checkbox:checked'))
             .filter(item => item.dataset.type === 'folder')
