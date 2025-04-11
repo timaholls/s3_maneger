@@ -44,6 +44,7 @@ class S3ActionLog(models.Model):
         ('upload', 'Загрузка файла'),
         ('restore', 'Восстановление из корзины'),
         ('move', 'Перемещение'),  # Добавлено новое действие 'Перемещение'
+        ('sign_document', 'Подписание документа'),  # Новый тип действия
     ]
 
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Пользователь")
@@ -112,3 +113,43 @@ class TrashItem(models.Model):
         }
         expired_items.delete()
         return result
+
+
+class DocumentSignature(models.Model):
+    """Модель для хранения информации о документах, требующих подписи"""
+    DOCUMENT_TYPES = [
+        ('upload', 'Для загрузки'),
+        ('download', 'Для скачивания'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Ожидает подписи'),
+        ('signed', 'Подписан'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Пользователь")
+    title = models.CharField(max_length=255, verbose_name="Название документа")
+    document_path = models.CharField(max_length=1024, verbose_name="Путь к документу")
+    document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPES, verbose_name="Тип документа")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Статус")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    signed_at = models.DateTimeField(null=True, blank=True, verbose_name="Дата подписания")
+
+    class Meta:
+        verbose_name = "Документ для подписи"
+        verbose_name_plural = "Документы для подписи"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} - {self.user.username} ({self.get_status_display()})"
+
+    def sign(self):
+        """Помечает документ как подписанный и сохраняет время подписания"""
+        self.status = 'signed'
+        self.signed_at = timezone.now()
+        self.save()
+
+    @classmethod
+    def has_pending_documents(cls, user):
+        """Проверяет, есть ли у пользователя документы, ожидающие подписи"""
+        return cls.objects.filter(user=user, status='pending').exists()
